@@ -1,0 +1,51 @@
+# 请求在多少秒后自动过期。
+request-timeout-seconds: 30
+
+# 使用 plugins/KaTpa/lang 下的语言文件名（不含 .yml）。
+language: zh_CN
+
+# 同意请求后，实际传送前的吟唱时间。
+warmup-seconds: 3
+
+# 双击潜行模式下，两次按键允许的最大间隔。
+double-sneak-interval-seconds: 2
+
+# 玩家成功发出一次有效请求后，再次请求所需等待的时间。
+cooldown:
+  enabled: true
+  seconds: 30
+
+# 是否允许跨世界传送。
+allow-cross-world: true
+
+# 禁止发起或到达的世界名称，区分大小写。
+disabled-worlds: []
+
+# 交互音效。sound 使用 Minecraft 注册表键。
+sounds:
+  request-received:
+    enabled: true
+    sound: minecraft:block.note_block.bell
+    volume: 1.0
+    pitch: 1.5
+  countdown:
+    enabled: true
+    sound: minecraft:block.note_block.hat
+    volume: 0.8
+    pitch: 1.0
+  teleport:
+    enabled: true
+    sound: minecraft:entity.enderman.teleport
+    volume: 1.0
+    pitch: 1.0
+
+# 吟唱期间环绕旅行者的末影风格粒子。
+particles:
+  warmup:
+    enabled: true
+    particle: PORTAL
+    count: 12
+    offset-x: 0.45
+    offset-y: 0.9
+    offset-z: 0.45
+    extra: 0.08

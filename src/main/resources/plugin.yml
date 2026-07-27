@@ -1,0 +1,51 @@
+name: KaTpa
+version: '${version}'
+main: org.katacr.katpa.KaTpaPlugin
+api-version: '1.21'
+description: 玩家传送请求、邀请与偏好管理
+authors: [katacr]
+libraries:
+  - net.kyori:adventure-text-serializer-legacy:4.23.0
+  - net.kyori:adventure-text-serializer-bungeecord:4.4.1
+
+commands:
+  katap:
+    description: KaTpa 主命令
+    usage: /katap <help|reload>
+  tpa:
+    description: 请求传送到另一名玩家的位置
+    usage: /tpa [玩家名]
+    permission: katpa.use
+  tpahere:
+    description: 邀请另一名玩家传送到你的位置
+    usage: /tpahere [玩家名]
+    permission: katpa.use
+  tpaccept:
+    description: 接受当前传送请求
+    usage: /tpaccept
+    aliases: [tpaaccept]
+    permission: katpa.use
+  tpdeny:
+    description: 拒绝当前传送请求
+    usage: /tpdeny
+    aliases: [tpadeny]
+    permission: katpa.use
+  tpasetting:
+    description: 打开传送偏好设置
+    usage: /tpasetting
+    aliases: [tpasettings]
+    permission: katpa.setting
+
+permissions:
+  katpa.use:
+    description: 允许发起和处理传送请求
+    default: true
+  katpa.setting:
+    description: 允许修改自己的传送偏好
+    default: true
+  katpa.admin:
+    description: 允许重载 KaTpa 配置
+    default: op
+  katpa.cooldown.bypass:
+    description: 允许绕过传送请求冷却
+    default: op
