@@ -142,9 +142,12 @@ public final class SettingsCommand implements CommandExecutor, TabCompleter {
 
     /** 发送紧凑的设置指令帮助。 */
     private void sendUsage(Player player) {
-        player.sendMessage(plugin.messages().component("ui.usage.title", Map.of(), false));
-        player.sendMessage(plugin.messages().component("ui.usage.mode", Map.of(), false));
-        player.sendMessage(plugin.messages().component("ui.usage.list", Map.of(), false));
+        plugin.messages().sendComponent(player,
+                plugin.messages().component("ui.usage.title", Map.of(), false));
+        plugin.messages().sendComponent(player,
+                plugin.messages().component("ui.usage.mode", Map.of(), false));
+        plugin.messages().sendComponent(player,
+                plugin.messages().component("ui.usage.list", Map.of(), false));
     }
 
     /** 按当前输入前缀过滤补全候选。 */

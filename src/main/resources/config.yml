@@ -4,6 +4,21 @@ request-timeout-seconds: 30
 # 使用 plugins/KaTpa/lang 下的语言文件名（不含 .yml）。
 language: zh_CN
 
+# KaProxy 跨服事务。关闭后插件保持原有单服行为。
+proxy:
+  enabled: false
+
+# 玩家接受模式、已知玩家和名单存储。跨服网络建议所有子服连接同一个 MySQL 数据库。
+storage:
+  type: sqlite
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: katpa
+    username: katpa
+    password: change-me
+    use-ssl: false
+
 # 同意请求后，实际传送前的吟唱时间。
 warmup-seconds: 3
 

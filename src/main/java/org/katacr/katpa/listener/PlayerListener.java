@@ -24,6 +24,7 @@ public final class PlayerListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         plugin.settings().rememberPlayer(event.getPlayer());
+        plugin.network().handleJoin(event.getPlayer());
     }
 
     /** 玩家离开服务器时取消其相关请求和吟唱。 */

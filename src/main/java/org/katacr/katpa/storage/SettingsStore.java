@@ -25,7 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-/** 管理玩家接受模式、已知名称与关系名单的 SQLite 持久化缓存。 */
+/** 管理玩家接受模式、已知名称与关系名单的 SQLite 或 MySQL 持久化缓存。 */
 public final class SettingsStore {
     private final KaTpaPlugin plugin;
     private final Map<UUID, AcceptMode> modes = new ConcurrentHashMap<>();
@@ -37,6 +37,7 @@ public final class SettingsStore {
         return thread;
     });
     private Connection connection;
+    private boolean mysql;
 
     /** 创建绑定插件实例的数据存储。 */
     public SettingsStore(KaTpaPlugin plugin) {
@@ -46,30 +47,64 @@ public final class SettingsStore {
     /** 初始化数据库结构并一次性载入全部偏好数据。 */
     public void initialize() throws SQLException, ClassNotFoundException {
         plugin.getDataFolder().mkdirs();
-        File databaseFile = new File(plugin.getDataFolder(), "players.db");
-        Class.forName("org.sqlite.JDBC");
-        connection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getAbsolutePath());
+        mysql = plugin.getConfig().getString("storage.type", "sqlite").equalsIgnoreCase("mysql");
+        if (mysql) {
+            Class.forName("org.mariadb.jdbc.Driver");
+            String host = plugin.getConfig().getString("storage.mysql.host", "127.0.0.1");
+            int port = plugin.getConfig().getInt("storage.mysql.port", 3306);
+            String database = plugin.getConfig().getString("storage.mysql.database", "katpa");
+            boolean useSsl = plugin.getConfig().getBoolean("storage.mysql.use-ssl", false);
+            String url = "jdbc:mariadb://" + host + ":" + port + "/" + database
+                    + "?useSsl=" + useSsl + "&connectTimeout=5000&socketTimeout=10000";
+            connection = DriverManager.getConnection(url,
+                    plugin.getConfig().getString("storage.mysql.username", "katpa"),
+                    plugin.getConfig().getString("storage.mysql.password", "change-me"));
+        } else {
+            File databaseFile = new File(plugin.getDataFolder(), "players.db");
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getAbsolutePath());
+        }
         try (Statement statement = connection.createStatement()) {
-            statement.execute("PRAGMA journal_mode=DELETE");
-            statement.execute("PRAGMA busy_timeout=5000");
-            statement.execute("PRAGMA foreign_keys=ON");
-            statement.executeUpdate("""
-                    CREATE TABLE IF NOT EXISTS players (
-                        uuid TEXT PRIMARY KEY,
-                        last_name TEXT NOT NULL,
-                        accept_mode TEXT NOT NULL DEFAULT 'DIALOG',
-                        updated_at INTEGER NOT NULL
-                    )
-                    """);
-            statement.executeUpdate("""
-                    CREATE TABLE IF NOT EXISTS relations (
-                        owner_uuid TEXT NOT NULL,
-                        target_uuid TEXT NOT NULL,
-                        target_name TEXT NOT NULL,
-                        list_type TEXT NOT NULL,
-                        PRIMARY KEY (owner_uuid, target_uuid)
-                    )
-                    """);
+            if (mysql) {
+                statement.executeUpdate("""
+                        CREATE TABLE IF NOT EXISTS players (
+                            uuid VARCHAR(36) PRIMARY KEY,
+                            last_name VARCHAR(64) NOT NULL,
+                            accept_mode VARCHAR(16) NOT NULL DEFAULT 'DIALOG',
+                            updated_at BIGINT NOT NULL
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                        """);
+                statement.executeUpdate("""
+                        CREATE TABLE IF NOT EXISTS relations (
+                            owner_uuid VARCHAR(36) NOT NULL,
+                            target_uuid VARCHAR(36) NOT NULL,
+                            target_name VARCHAR(64) NOT NULL,
+                            list_type VARCHAR(16) NOT NULL,
+                            PRIMARY KEY (owner_uuid, target_uuid)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                        """);
+            } else {
+                statement.execute("PRAGMA journal_mode=DELETE");
+                statement.execute("PRAGMA busy_timeout=5000");
+                statement.execute("PRAGMA foreign_keys=ON");
+                statement.executeUpdate("""
+                        CREATE TABLE IF NOT EXISTS players (
+                            uuid TEXT PRIMARY KEY,
+                            last_name TEXT NOT NULL,
+                            accept_mode TEXT NOT NULL DEFAULT 'DIALOG',
+                            updated_at INTEGER NOT NULL
+                        )
+                        """);
+                statement.executeUpdate("""
+                        CREATE TABLE IF NOT EXISTS relations (
+                            owner_uuid TEXT NOT NULL,
+                            target_uuid TEXT NOT NULL,
+                            target_name TEXT NOT NULL,
+                            list_type TEXT NOT NULL,
+                            PRIMARY KEY (owner_uuid, target_uuid)
+                        )
+                        """);
+            }
         }
         loadCache();
     }
@@ -80,15 +115,22 @@ public final class SettingsStore {
         knownPlayers.put(player.getUniqueId(), knownPlayer);
         modes.putIfAbsent(player.getUniqueId(), AcceptMode.DIALOG);
         executeUpdate(() -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
+            String sql = mysql ? """
+                    INSERT INTO players(uuid, last_name, accept_mode, updated_at) VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE last_name=VALUES(last_name), updated_at=VALUES(updated_at)
+                    """ : """
                     INSERT INTO players(uuid, last_name, accept_mode, updated_at) VALUES (?, ?, ?, ?)
                     ON CONFLICT(uuid) DO UPDATE SET last_name=excluded.last_name, updated_at=excluded.updated_at
-                    """)) {
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, player.getUniqueId().toString());
                 statement.setString(2, player.getName());
                 statement.setString(3, mode(player.getUniqueId()).name());
                 statement.setLong(4, System.currentTimeMillis());
                 statement.executeUpdate();
+            }
+            if (mysql) {
+                refreshPlayer(player.getUniqueId());
             }
         });
     }
@@ -109,6 +151,7 @@ public final class SettingsStore {
                 statement.setLong(2, System.currentTimeMillis());
                 statement.setString(3, player.getUniqueId().toString());
                 statement.executeUpdate();
+                modes.put(player.getUniqueId(), mode);
             }
         });
     }
@@ -124,11 +167,15 @@ public final class SettingsStore {
         relations.computeIfAbsent(ownerId, ignored -> new ConcurrentHashMap<>())
                 .put(target.uuid(), new RelationEntry(target.uuid(), target.name(), type));
         executeUpdate(() -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
+            String sql = mysql ? """
+                    INSERT INTO relations(owner_uuid, target_uuid, target_name, list_type) VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE target_name=VALUES(target_name), list_type=VALUES(list_type)
+                    """ : """
                     INSERT INTO relations(owner_uuid, target_uuid, target_name, list_type) VALUES (?, ?, ?, ?)
                     ON CONFLICT(owner_uuid, target_uuid) DO UPDATE SET
                         target_name=excluded.target_name, list_type=excluded.list_type
-                    """)) {
+                    """;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, ownerId.toString());
                 statement.setString(2, target.uuid().toString());
                 statement.setString(3, target.name());
@@ -227,6 +274,46 @@ public final class SettingsStore {
                     plugin.getLogger().warning("忽略无法识别的名单类型: " + result.getString("list_type"));
                 }
             }
+        }
+    }
+
+    /** 玩家进入新子服时从共享 MySQL 刷新其接受模式和关系名单。 */
+    private void refreshPlayer(UUID playerId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT last_name, accept_mode FROM players WHERE uuid=?")) {
+            statement.setString(1, playerId.toString());
+            try (ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    knownPlayers.put(playerId, new KnownPlayer(playerId, result.getString("last_name")));
+                    try {
+                        modes.put(playerId, AcceptMode.valueOf(result.getString("accept_mode")));
+                    } catch (IllegalArgumentException ignored) {
+                        modes.put(playerId, AcceptMode.DIALOG);
+                    }
+                }
+            }
+        }
+        Map<UUID, RelationEntry> refreshed = new ConcurrentHashMap<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT target_uuid, target_name, list_type FROM relations WHERE owner_uuid=?")) {
+            statement.setString(1, playerId.toString());
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    UUID targetId = UUID.fromString(result.getString("target_uuid"));
+                    try {
+                        ListType type = ListType.valueOf(result.getString("list_type"));
+                        refreshed.put(targetId, new RelationEntry(
+                                targetId, result.getString("target_name"), type));
+                    } catch (IllegalArgumentException ignored) {
+                        plugin.getLogger().warning("忽略无法识别的名单类型: " + result.getString("list_type"));
+                    }
+                }
+            }
+        }
+        if (refreshed.isEmpty()) {
+            relations.remove(playerId);
+        } else {
+            relations.put(playerId, refreshed);
         }
     }
 

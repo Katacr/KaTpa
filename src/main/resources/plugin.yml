@@ -30,6 +30,10 @@ commands:
     usage: /tpdeny
     aliases: [tpadeny]
     permission: katpa.use
+  tpacancel:
+    description: 撤销自己发出的传送请求
+    usage: /tpacancel
+    permission: katpa.use
   tpasetting:
     description: 打开传送偏好设置
     usage: /tpasetting

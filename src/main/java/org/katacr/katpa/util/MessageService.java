@@ -13,6 +13,7 @@ import java.util.Map;
 /** 从配置读取带占位符的消息，并转换为 Adventure 组件。 */
 public final class MessageService {
     private static final LegacyComponentSerializer SERIALIZER = LegacyComponentSerializer.legacyAmpersand();
+    private static final LegacyComponentSerializer SECTION_SERIALIZER = LegacyComponentSerializer.legacySection();
     private final KaTpaPlugin plugin;
     private YamlConfiguration language;
 
@@ -39,7 +40,7 @@ public final class MessageService {
 
     /** 向接收者发送带统一前缀的配置消息。 */
     public void send(CommandSender sender, String key, Map<String, String> replacements) {
-        sender.sendMessage(component(key, replacements, true));
+        sendComponent(sender, component(key, replacements, true));
     }
 
     /** 向接收者发送不含占位符的带前缀消息。 */
@@ -49,12 +50,22 @@ public final class MessageService {
 
     /** 向玩家 ActionBar 发送不带聊天前缀的配置消息。 */
     public void sendActionBar(Player player, String key, Map<String, String> replacements) {
-        player.sendActionBar(component(key, replacements, false));
+        sendActionBar(player, component(key, replacements, false));
     }
 
     /** 向玩家 ActionBar 发送不含占位符的配置消息。 */
     public void sendActionBar(Player player, String key) {
         sendActionBar(player, key, Map.of());
+    }
+
+    /** 以 Bukkit 通用的旧式文本 API 发送普通组件消息。 */
+    public void sendComponent(CommandSender sender, Component message) {
+        sender.sendMessage(SECTION_SERIALIZER.serialize(message));
+    }
+
+    /** 通过当前 Paper 或 Spigot 适配器发送组件 ActionBar。 */
+    public void sendActionBar(Player player, Component message) {
+        plugin.interactions().sendActionBar(player, message);
     }
 
     /** 生成配置消息组件，可选择是否附加统一前缀。 */

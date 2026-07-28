@@ -1,6 +1,5 @@
 package org.katacr.katpa.command;
 
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -9,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.katacr.katpa.KaTpaPlugin;
+import org.katacr.katpa.model.NetworkPlayer;
 import org.katacr.katpa.model.RequestType;
 
 import java.util.List;
@@ -38,7 +38,7 @@ public final class TargetCommand implements CommandExecutor, TabCompleter {
             plugin.interactions().showPlayerSelector(player, type);
             return true;
         }
-        Player target = Bukkit.getPlayerExact(args[0]);
+        NetworkPlayer target = plugin.network().findPlayerExact(args[0]);
         if (target == null) {
             plugin.messages().send(player, "player-not-found", Map.of("player", args[0]));
             return true;
@@ -55,10 +55,10 @@ public final class TargetCommand implements CommandExecutor, TabCompleter {
             return List.of();
         }
         String prefix = args[0].toLowerCase(Locale.ROOT);
-        return Bukkit.getOnlinePlayers().stream()
+        return plugin.network().onlinePlayers().stream()
                 .filter(player -> !(sender instanceof Player senderPlayer)
-                        || !player.getUniqueId().equals(senderPlayer.getUniqueId()))
-                .map(Player::getName)
+                        || !player.id().equals(senderPlayer.getUniqueId()))
+                .map(NetworkPlayer::name)
                 .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();

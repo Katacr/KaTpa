@@ -4,12 +4,14 @@ import net.byteflux.libby.BukkitLibraryManager;
 import net.byteflux.libby.Library;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.katacr.katpa.command.CancelCommand;
 import org.katacr.katpa.command.KaTpaCommand;
 import org.katacr.katpa.command.ResponseCommand;
 import org.katacr.katpa.command.SettingsCommand;
 import org.katacr.katpa.command.TargetCommand;
 import org.katacr.katpa.listener.PlayerListener;
 import org.katacr.katpa.model.RequestType;
+import org.katacr.katpa.network.CrossServerService;
 import org.katacr.katpa.service.ParticleService;
 import org.katacr.katpa.service.RequestService;
 import org.katacr.katpa.service.SoundService;
@@ -29,10 +31,13 @@ public final class KaTpaPlugin extends JavaPlugin {
     private TeleportService teleports;
     private RequestService requests;
     private InteractionService interactions;
+    private CrossServerService network;
 
     /** 在插件启用前通过 Libby 下载并挂载 SQLite JDBC 运行时依赖。 */
     @Override
     public void onLoad() {
+        saveDefaultConfig();
+        reloadConfig();
         File librariesDirectory = new File(getDataFolder().getParentFile().getParentFile(), "libraries");
         if (!librariesDirectory.exists() && !librariesDirectory.mkdirs()) {
             throw new IllegalStateException("无法创建依赖库目录: " + librariesDirectory.getAbsolutePath());
@@ -41,14 +46,23 @@ public final class KaTpaPlugin extends JavaPlugin {
         BukkitLibraryManager libraryManager = new BukkitLibraryManager(this, librariesDirectory.getAbsolutePath());
         libraryManager.addMavenCentral();
         libraryManager.addRepository("https://maven.aliyun.com/repository/public");
-        Library sqlite = Library.builder()
-                .groupId("org{}xerial")
-                .artifactId("sqlite-jdbc")
-                .version("3.50.3.0")
-                .build();
-
-        getLogger().info("正在检查 SQLite JDBC 运行时依赖……");
-        libraryManager.loadLibrary(sqlite);
+        if (getConfig().getString("storage.type", "sqlite").equalsIgnoreCase("mysql")) {
+            Library mariaDb = Library.builder()
+                    .groupId("org{}mariadb{}jdbc")
+                    .artifactId("mariadb-java-client")
+                    .version("3.5.6")
+                    .build();
+            getLogger().info("正在检查 MariaDB JDBC 运行时依赖……");
+            libraryManager.loadLibrary(mariaDb);
+        } else {
+            Library sqlite = Library.builder()
+                    .groupId("org{}xerial")
+                    .artifactId("sqlite-jdbc")
+                    .version("3.50.3.0")
+                    .build();
+            getLogger().info("正在检查 SQLite JDBC 运行时依赖……");
+            libraryManager.loadLibrary(sqlite);
+        }
     }
 
     /** 初始化配置、SQLite 数据、业务服务和 Bukkit 注册项。 */
@@ -77,6 +91,8 @@ public final class KaTpaPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
+        network = new CrossServerService(this);
+        network.initialize();
         registerCommands();
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getOnlinePlayers().forEach(settings::rememberPlayer);
@@ -87,6 +103,9 @@ public final class KaTpaPlugin extends JavaPlugin {
     /** 停止所有临时任务并等待数据库写入完成。 */
     @Override
     public void onDisable() {
+        if (network != null) {
+            network.shutdown();
+        }
         if (interactions != null) {
             interactions.shutdown();
         }
@@ -136,7 +155,12 @@ public final class KaTpaPlugin extends JavaPlugin {
         return interactions;
     }
 
-    /** 注册主命令和五组玩家指令及其补全器。 */
+    /** 返回 KaProxy 跨服通讯与在线玩家发现服务。 */
+    public CrossServerService network() {
+        return network;
+    }
+
+    /** 注册主命令和六组玩家指令及其补全器。 */
     private void registerCommands() {
         KaTpaCommand mainCommand = new KaTpaCommand(this);
         TargetCommand tpa = new TargetCommand(this, RequestType.TPA);
@@ -150,6 +174,7 @@ public final class KaTpaPlugin extends JavaPlugin {
         command("tpahere").setTabCompleter(tpaHere);
         command("tpaccept").setExecutor(new ResponseCommand(this, true));
         command("tpdeny").setExecutor(new ResponseCommand(this, false));
+        command("tpacancel").setExecutor(new CancelCommand(this));
         command("tpasetting").setExecutor(settingsCommand);
         command("tpasetting").setTabCompleter(settingsCommand);
     }

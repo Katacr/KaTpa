@@ -3,6 +3,7 @@ package org.katacr.katpa.ui.spigot;
 import com.google.gson.JsonElement;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.bungeecord.BungeeComponentSerializer;
+import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ClickEventCustom;
 import net.md_5.bungee.api.chat.HoverEvent;
@@ -30,6 +31,7 @@ import org.katacr.katpa.KaTpaPlugin;
 import org.katacr.katpa.model.AcceptMode;
 import org.katacr.katpa.model.KnownPlayer;
 import org.katacr.katpa.model.ListType;
+import org.katacr.katpa.model.NetworkPlayer;
 import org.katacr.katpa.model.RelationEntry;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.model.TeleportRequest;
@@ -85,16 +87,37 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
+    /** 使用 Spigot Bungee Chat API 向玩家发送 ActionBar。 */
+    @Override
+    public void sendActionBar(Player player, Component message) {
+        player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                BungeeComponentSerializer.get().serialize(message));
+    }
+
+    /** 使用 Spigot Bungee Chat API 发送带请求 UUID 的撤销入口。 */
+    @Override
+    public void sendCancellableRequestCreated(Player sender, String receiverName, TeleportRequest request,
+                                              String messageKey) {
+        TextComponent message = new TextComponent(text(plugin.messages().component(
+                messageKey, Map.of("player", receiverName), true)));
+        message.addExtra("  ");
+        message.addExtra(command(
+                plugin.messages().component("ui.chat.cancel", Map.of(), false),
+                plugin.messages().component("ui.chat.cancel-hover", Map.of(), false),
+                "/tpacancel " + request.id()));
+        sender.spigot().sendMessage(message);
+    }
+
     /** 按接收者偏好显示一条待处理请求。 */
     @Override
-    public void presentRequest(Player receiver, Player sender, TeleportRequest request, AcceptMode mode) {
+    public void presentRequest(Player receiver, String senderName, TeleportRequest request, AcceptMode mode) {
         String messageKey = request.type() == RequestType.TPA
                 ? "request-received-tpa" : "request-received-here";
         switch (mode) {
             case DIALOG -> showRequestList(receiver);
-            case CHAT -> showChatActions(receiver, sender, request, messageKey);
+            case CHAT -> showChatActions(receiver, senderName, request, messageKey);
             case SNEAK -> send(receiver, plugin.messages().component(
-                            messageKey, Map.of("player", sender.getName()), true)
+                            messageKey, Map.of("player", senderName), true)
                     .append(Component.space())
                     .append(plugin.messages().component("sneak-hint", Map.of(), false)));
         }
@@ -169,8 +192,7 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
         body.add(new PlainMessageBody(text(plugin.messages().component(
                 "ui.request-list.header", Map.of(), false)), 500));
         for (TeleportRequest request : plugin.requests().incoming(receiver.getUniqueId())) {
-            Player sender = Bukkit.getPlayer(request.senderId());
-            String senderName = sender == null ? plugin.messages().text("unknown-player") : sender.getName();
+            String senderName = plugin.requests().senderName(request);
             String messageKey = request.type() == RequestType.TPA
                     ? "ui.request-list.tpa" : "ui.request-list.here";
             UUID requestId = request.id();
@@ -206,23 +228,13 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
     /** 显示未指定玩家参数时使用的在线玩家 Dialog 选择器。 */
     @Override
     public void showPlayerSelector(Player player, RequestType type) {
-        List<ActionButton> buttons = Bukkit.getOnlinePlayers().stream()
-                .filter(target -> !target.getUniqueId().equals(player.getUniqueId()))
-                .sorted((first, second) -> first.getName().compareToIgnoreCase(second.getName()))
+        List<ActionButton> buttons = plugin.network().onlinePlayers().stream()
+                .filter(target -> !target.id().equals(player.getUniqueId()))
                 .map(target -> {
-                    UUID targetId = target.getUniqueId();
-                    String targetName = target.getName();
-                    return button(player, Component.text(targetName),
+                    return button(player, Component.text(target.name()),
                             plugin.messages().component(type == RequestType.TPA
                                     ? "ui.selector.tooltip-tpa" : "ui.selector.tooltip-here", Map.of(), false),
-                            () -> {
-                                Player currentTarget = Bukkit.getPlayer(targetId);
-                                if (currentTarget == null) {
-                                    plugin.messages().send(player, "player-not-found", Map.of("player", targetName));
-                                    return;
-                                }
-                                plugin.requests().create(player, currentTarget, type);
-                            });
+                            () -> plugin.requests().create(player, target, type));
                 })
                 .toList();
 
@@ -350,9 +362,9 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
     }
 
     /** 向聊天框发送可点击的同意与拒绝文本，复用命令路径。 */
-    private void showChatActions(Player receiver, Player sender, TeleportRequest request, String messageKey) {
+    private void showChatActions(Player receiver, String senderName, TeleportRequest request, String messageKey) {
         TextComponent message = new TextComponent(text(plugin.messages().component(
-                messageKey, Map.of("player", sender.getName()), true)));
+                messageKey, Map.of("player", senderName), true)));
         message.addExtra("  ");
         message.addExtra(command(
                 plugin.messages().component("ui.chat.accept", Map.of(), false),
@@ -425,7 +437,7 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
         return component;
     }
 
-    /** 创建运行命令的可点击聊天文本，复用 /tpaccept、/tpdeny 命令路径。 */
+    /** 创建运行命令的可点击聊天文本，复用请求处理指令路径。 */
     private TextComponent command(Component label, Component hover, String runCommand) {
         TextComponent component = new TextComponent(text(label));
         component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(new BaseComponent[]{text(hover)})));

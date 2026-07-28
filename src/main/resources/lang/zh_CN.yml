@@ -10,6 +10,10 @@ teleport-busy: "&c需要传送的玩家正在进行另一场传送。"
 cooldown-active: "&c请求冷却中，还需等待 &f{seconds}&c 秒。"
 world-disabled: "&c当前世界不允许使用传送请求。"
 cross-world-disabled: "&c服务器不允许跨世界传送。"
+proxy-unavailable: "&c跨服服务当前不可用，请稍后重试。"
+network-target-moved: "&e目标玩家刚刚切换了服务器，请重新发送请求。"
+network-request-failed: "&c跨服请求发送失败，请稍后重试。"
+network-transaction-failed: "&c跨服传送失败：{reason}"
 request-sent-tpa: "&a已请求传送到 &f{player}&a 的位置。"
 request-sent-here: "&a已邀请 &f{player}&a 传送到你的位置。"
 request-received-tpa: "&f{player} &e请求传送到你的位置。"
@@ -22,6 +26,9 @@ request-accepted-sender: "&a{player} 已接受你的传送请求。"
 request-accepted-receiver: "&a你已接受 {player} 的传送请求。"
 request-denied-sender: "&c{player} 拒绝了你的传送请求。"
 request-denied-receiver: "&e你已拒绝 {player} 的传送请求。"
+request-cancel-missing: "&c当前没有可撤销的传送请求。"
+request-cancelled-sender: "&e已撤销发给 &f{player}&e 的传送请求。"
+request-cancelled-receiver: "&e{player} 已撤销传送请求。"
 blacklisted-sender: "&c{player} 已拒绝你的传送请求。"
 blacklisted-receiver: "&e已自动拒绝黑名单玩家 {player} 的传送请求。"
 whitelist-auto: "&a{player} 位于你的白名单中，已自动接受请求。"
@@ -50,6 +57,7 @@ help:
   tpahere: "&f/tpahere [玩家] &8- &7邀请目标玩家传送到你的位置"
   tpaccept: "&f/tpaccept &8- &7接受请求；多条请求时打开请求列表"
   tpdeny: "&f/tpdeny &8- &7拒绝请求；多条请求时打开请求列表"
+  tpacancel: "&f/tpacancel &8- &7撤销自己当前发出的请求"
   settings: "&f/tpasetting &8- &7打开接受模式和名单设置"
   reload: "&f/katap reload &8- &7重载配置和语言文件（管理员）"
 
@@ -63,6 +71,19 @@ list:
   blacklist: "黑名单"
 
 unknown-player: "未知玩家"
+
+network-reason:
+  player-offline: "相关玩家已离线"
+  target-moved-server: "目标玩家已切换服务器"
+  connect-failed: "无法连接目标服务器"
+  arrival-delivery-failed: "目标服务器未收到传送凭证"
+  transaction-timeout: "传送事务超时"
+  world-disabled: "目标世界不允许传送"
+  teleport-failed: "目标服传送失败"
+  proxy-unavailable: "代理通讯中断"
+  invalid-request: "请求数据无效"
+  request-stale: "请求已经失效"
+  module-disabled: "代理端已关闭传送模块"
 
 ui:
   selector:
@@ -113,8 +134,10 @@ ui:
   chat:
     accept: "[同意]"
     deny: "[拒绝]"
+    cancel: "&c[撤销]"
     accept-hover: "点击同意请求"
     deny-hover: "点击拒绝请求"
+    cancel-hover: "点击撤销这条请求"
   usage:
     title: "KaTpa 设置用法："
     mode: "/tpasetting mode <dialog|chat|sneak>"

@@ -20,6 +20,7 @@ import org.katacr.katpa.KaTpaPlugin;
 import org.katacr.katpa.model.AcceptMode;
 import org.katacr.katpa.model.KnownPlayer;
 import org.katacr.katpa.model.ListType;
+import org.katacr.katpa.model.NetworkPlayer;
 import org.katacr.katpa.model.RelationEntry;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.model.TeleportRequest;
@@ -53,16 +54,37 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
         this.plugin = plugin;
     }
 
+    /** 使用 Paper Adventure API 向玩家发送 ActionBar。 */
+    @Override
+    public void sendActionBar(Player player, Component message) {
+        player.sendActionBar(message);
+    }
+
+    /** 使用 Adventure 命令点击事件发送带请求 UUID 的撤销入口。 */
+    @Override
+    public void sendCancellableRequestCreated(Player sender, String receiverName, TeleportRequest request,
+                                              String messageKey) {
+        Component cancel = plugin.messages().component("ui.chat.cancel", Map.of(), false)
+                .decorate(TextDecoration.BOLD)
+                .clickEvent(ClickEvent.runCommand("/tpacancel " + request.id()))
+                .hoverEvent(HoverEvent.showText(plugin.messages().component(
+                        "ui.chat.cancel-hover", Map.of(), false)));
+        sender.sendMessage(plugin.messages().component(
+                        messageKey, Map.of("player", receiverName), true)
+                .append(Component.text("  "))
+                .append(cancel));
+    }
+
     /** 按接收者偏好显示一条待处理请求。 */
     @Override
-    public void presentRequest(Player receiver, Player sender, TeleportRequest request, AcceptMode mode) {
+    public void presentRequest(Player receiver, String senderName, TeleportRequest request, AcceptMode mode) {
         String messageKey = request.type() == RequestType.TPA
                 ? "request-received-tpa" : "request-received-here";
         switch (mode) {
             case DIALOG -> showRequestList(receiver);
-            case CHAT -> showChatActions(receiver, sender, request, messageKey);
+            case CHAT -> showChatActions(receiver, senderName, request, messageKey);
             case SNEAK -> receiver.sendMessage(plugin.messages().component(
-                            messageKey, Map.of("player", sender.getName()), true)
+                            messageKey, Map.of("player", senderName), true)
                     .append(Component.space())
                     .append(plugin.messages().component("sneak-hint", Map.of(), false)));
         }
@@ -111,8 +133,7 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
         body.add(DialogBody.plainMessage(plugin.messages().component(
                 "ui.request-list.header", Map.of(), false), 500));
         for (TeleportRequest request : plugin.requests().incoming(receiver.getUniqueId())) {
-            Player sender = Bukkit.getPlayer(request.senderId());
-            String senderName = sender == null ? plugin.messages().text("unknown-player") : sender.getName();
+            String senderName = plugin.requests().senderName(request);
             String messageKey = request.type() == RequestType.TPA
                     ? "ui.request-list.tpa" : "ui.request-list.here";
             Component accept = plugin.messages().component("ui.button.accept-bracket", Map.of(), false)
@@ -202,21 +223,13 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
     /** 显示未指定玩家参数时使用的在线玩家 Dialog 选择器。 */
     @Override
     public void showPlayerSelector(Player player, RequestType type) {
-        List<ActionButton> buttons = Bukkit.getOnlinePlayers().stream()
-                .filter(target -> !target.getUniqueId().equals(player.getUniqueId()))
-                .sorted((first, second) -> first.getName().compareToIgnoreCase(second.getName()))
+        List<ActionButton> buttons = plugin.network().onlinePlayers().stream()
+                .filter(target -> !target.id().equals(player.getUniqueId()))
                 .map(target -> ActionButton.builder(
-                                Component.text(target.getName(), NamedTextColor.AQUA))
+                                Component.text(target.name(), NamedTextColor.AQUA))
                         .tooltip(plugin.messages().component(type == RequestType.TPA
                                 ? "ui.selector.tooltip-tpa" : "ui.selector.tooltip-here", Map.of(), false))
-                        .action(callback(player, () -> {
-                            Player currentTarget = Bukkit.getPlayer(target.getUniqueId());
-                            if (currentTarget == null) {
-                                plugin.messages().send(player, "player-not-found", Map.of("player", target.getName()));
-                                return;
-                            }
-                            plugin.requests().create(player, currentTarget, type);
-                        }))
+                        .action(callback(player, () -> plugin.requests().create(player, target, type)))
                         .build())
                 .toList();
 
@@ -369,7 +382,7 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
     }
 
     /** 向聊天框发送可点击的同意与拒绝文本。 */
-    private void showChatActions(Player receiver, Player sender, TeleportRequest request, String messageKey) {
+    private void showChatActions(Player receiver, String senderName, TeleportRequest request, String messageKey) {
         Component accept = plugin.messages().component("ui.chat.accept", Map.of(), false)
                 .decorate(TextDecoration.BOLD)
                 .clickEvent(ClickEvent.runCommand("/tpaccept " + request.id()))
@@ -381,7 +394,7 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
                 .hoverEvent(HoverEvent.showText(plugin.messages().component(
                         "ui.chat.deny-hover", Map.of(), false)));
         receiver.sendMessage(plugin.messages().component(
-                        messageKey, Map.of("player", sender.getName()), true)
+                        messageKey, Map.of("player", senderName), true)
                 .append(Component.text("  "))
                 .append(accept)
                 .append(Component.text("  "))

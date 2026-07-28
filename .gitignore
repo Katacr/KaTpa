@@ -4,3 +4,4 @@ run/
 *.db
 *.db-shm
 *.db-wal
+/run-spigot/

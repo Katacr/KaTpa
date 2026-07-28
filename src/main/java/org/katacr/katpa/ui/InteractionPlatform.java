@@ -1,5 +1,6 @@
 package org.katacr.katpa.ui;
 
+import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.katacr.katpa.KaTpaPlugin;
 import org.katacr.katpa.model.AcceptMode;
@@ -19,8 +20,14 @@ public interface InteractionPlatform {
     /** 初始化平台实现所需的监听器与运行时状态。 */
     void initialize(KaTpaPlugin plugin);
 
+    /** 使用当前服务器核心支持的 API 向玩家发送 ActionBar。 */
+    void sendActionBar(Player player, Component message);
+
+    /** 向发送者显示请求成功消息，并在尾部附加携带请求上下文的撤销文本。 */
+    void sendCancellableRequestCreated(Player sender, String receiverName, TeleportRequest request, String messageKey);
+
     /** 按接收者偏好显示一条待处理请求。 */
-    void presentRequest(Player receiver, Player sender, TeleportRequest request, AcceptMode mode);
+    void presentRequest(Player receiver, String senderName, TeleportRequest request, AcceptMode mode);
 
     /** 打开待处理请求列表，并记录需要在请求变化时接收更新的玩家。 */
     void showRequestList(Player receiver);

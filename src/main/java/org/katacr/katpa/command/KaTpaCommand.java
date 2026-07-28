@@ -34,8 +34,10 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
                 plugin.messages().send(sender, "no-permission");
                 return true;
             }
+            plugin.network().shutdown();
             plugin.reloadConfig();
             plugin.messages().reload();
+            plugin.network().initialize();
             plugin.messages().send(sender, "config-reloaded");
             return true;
         }
@@ -58,9 +60,11 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
 
     /** 从语言文件逐行发送完整的玩家指令帮助。 */
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(plugin.messages().component("help.header", Map.of(), false));
-        for (String key : List.of("tpa", "tpahere", "tpaccept", "tpdeny", "settings", "reload")) {
-            sender.sendMessage(plugin.messages().component("help." + key, Map.of(), false));
+        plugin.messages().sendComponent(sender,
+                plugin.messages().component("help.header", Map.of(), false));
+        for (String key : List.of("tpa", "tpahere", "tpaccept", "tpdeny", "tpacancel", "settings", "reload")) {
+            plugin.messages().sendComponent(sender,
+                    plugin.messages().component("help." + key, Map.of(), false));
         }
     }
 }
