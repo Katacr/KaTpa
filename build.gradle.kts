@@ -12,6 +12,7 @@ repositories {
     maven("https://repo.alessiodp.com/releases/")
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
+    maven("https://jitpack.io")
 }
 
 // Spigot 平台适配器编译在独立 sourceSet：使用 Spigot Bungee Dialog API，
@@ -25,6 +26,9 @@ val spigotAdapter by sourceSets.creating {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.7-R0.1-SNAPSHOT")
     compileOnly("net.kyori:adventure-text-serializer-legacy:4.23.0")
+    compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
+        exclude(group = "org.bukkit")
+    }
     implementation("net.byteflux:libby-bukkit:1.3.0")
     compileOnly("org.xerial:sqlite-jdbc:3.50.3.0")
     testImplementation(platform("org.junit:junit-bom:5.11.4"))

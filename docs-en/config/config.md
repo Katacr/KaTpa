@@ -8,6 +8,7 @@ KaTpa's functional settings are stored in `plugins/KaTpa/config.yml`.
 | --- | --- | --- |
 | `request-timeout-seconds` | `30` | Seconds before a pending request expires |
 | `language` | `zh_CN` | Language file selected from the `lang` folder |
+| `server-id` | `local` | Backend identifier used to record the player's server in cross-server mode |
 | `warmup-seconds` | `3` | Teleport warm-up after a request is accepted |
 | `double-sneak-interval-seconds` | `2` | Maximum delay between the two sneak presses |
 | `cooldown.enabled` | `true` | Enables the request cooldown |

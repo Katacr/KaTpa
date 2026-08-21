@@ -226,6 +226,16 @@ public final class SettingsStore {
         return new KnownPlayer(player.getUniqueId(), player.getName());
     }
 
+    /** 返回当前数据库连接，供共享存储使用。 */
+    public Connection connection() {
+        return connection;
+    }
+
+    /** 返回是否使用 MySQL。 */
+    public boolean isMysql() {
+        return mysql;
+    }
+
     /** 等待异步写入完成并关闭数据库连接。 */
     public void close() {
         databaseExecutor.shutdown();

@@ -8,6 +8,7 @@ KaTpa 的功能设置位于 `plugins/KaTpa/config.yml`。
 | --- | --- | --- |
 | `request-timeout-seconds` | `30` | 请求等待多少秒后自动过期 |
 | `language` | `zh_CN` | 使用 `lang` 文件夹中的语言文件 |
+| `server-id` | `local` | 子服标识，跨服模式下用于记录玩家所在服务器 |
 | `warmup-seconds` | `3` | 接受请求后的传送准备时间 |
 | `double-sneak-interval-seconds` | `2` | 双击潜行两次按键的最大间隔 |
 | `cooldown.enabled` | `true` | 是否启用请求冷却 |

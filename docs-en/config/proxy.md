@@ -13,11 +13,13 @@ KaTpa can work with KaProxy so players can send requests to players on other bac
 
 1. Place `KaProxy-1.0.0.jar` in the proxy's `plugins` folder.
 2. Start the proxy once so KaProxy creates its configuration.
-3. Make sure the Tpa module is enabled:
+3. Make sure the Tpa and Back modules are enabled:
 
 ```yaml
 modules:
   tpa:
+    enabled: true
+  back:
     enabled: true
 ```
 
@@ -46,7 +48,7 @@ Replace the sample database address and credentials, and use the same database s
 
 ## Player Experience
 
-Once enabled, the `/tpa` and `/tpahere` player dialogs contain players from the entire network. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers.
+Once enabled, the `/tpa` and `/tpahere` player dialogs contain players from the entire network. `/back` and `/dback` can also return across servers, and `/warp` and `/home` support cross-server teleportation too—the proxy switches the player to the target backend and teleports them to the exact coordinates. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers.
 
 By default, if the target player changes backend during the warm-up, KaProxy follows their current server.
 
@@ -55,7 +57,7 @@ By default, if the target player changes backend during the warm-up, KaProxy fol
 If players see "Cross-server service is currently unavailable," check:
 
 1. KaProxy is enabled correctly on the proxy.
-2. KaProxy's Tpa module is enabled.
+2. KaProxy's Tpa module is enabled (cross-server return also requires the Back module).
 3. `proxy.enabled` is `true` on the current backend.
 4. The player joined the backend through the proxy.
 5. The proxy and backend consoles do not contain related errors.

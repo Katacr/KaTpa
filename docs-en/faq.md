@@ -31,3 +31,27 @@ The storage type and connection settings are read when the plugin starts. Restar
 ## Why do I see `players.db-wal` and `players.db-shm`?
 
 KaTpa uses a single-file mode by default, so normally only `players.db` remains. If temporary files were created by another tool, shut the server down normally before checking them. Never delete database files while the server is running.
+
+## `/back` says there is no previous location
+
+The player has never been teleported, has never disconnected, or the world at the previous location has been unloaded. In cross-server mode, make sure the KaProxy Back module is enabled.
+
+## `/dback` only saves one death location
+
+The default permission `katpa.dback.amount.1` only allows 1 death location. Grant `katpa.dback.amount.3` or a higher value in a permission plugin to increase the limit.
+
+## Cross-server `/back` or `/dback` fails
+
+Check that the KaProxy Back module is enabled, `proxy.enabled` is `true`, the target backend is online, and the world is loaded.
+
+## `/warp` says insufficient funds
+
+The warp has a teleport cost set, which requires a Vault economy plugin and sufficient account balance. Administrators can adjust or remove the cost through the `/setwarp` management dialog.
+
+## `/sethome` says the home limit is reached
+
+The default permission `katpa.home.amount.1` only allows 1 home. Grant `katpa.home.amount.3` or a higher value in a permission plugin to increase the limit.
+
+## Cross-server `/warp` or `/home` fails
+
+Cross-server warp and home teleportation reuses the KaProxy Back module. Make sure the Back module is enabled, `proxy.enabled` is `true`, the target backend is online, and the world is loaded.

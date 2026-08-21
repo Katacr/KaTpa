@@ -12,6 +12,10 @@ description: KaTpa - 简单直观的玩家传送请求插件
 
 * `/tpa` 请求传送到另一名玩家的位置
 * `/tpahere` 邀请另一名玩家传送到自己位置
+* `/back` 返回上次位置
+* `/dback` 返回死亡位置
+* `/warp` 传送到公共地标
+* `/home` 传送到个人家
 * 对话框、聊天按钮、双击潜行三种接收方式
 * 同时处理来自多名玩家的请求
 * 白名单自动同意，黑名单自动拒绝
@@ -33,5 +37,5 @@ description: KaTpa - 简单直观的玩家传送请求插件
 ## 📖 下一步
 
 * 服主请阅读[开始使用](home/start.md)
-* 玩家请阅读[传送请求](usage/requests.md)和[个人设置](usage/settings.md)
+* 玩家请阅读[传送请求](usage/requests.md)、[返回位置](usage/back.md)、[地标传送](usage/warp.md)、[个人家](usage/home.md)和[个人设置](usage/settings.md)
 * 群组服请阅读[跨服传送](config/proxy.md)

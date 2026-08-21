@@ -12,6 +12,10 @@ description: KaTpa - Simple and intuitive player teleport requests
 
 * Request a teleport to another player with `/tpa`
 * Invite another player to your location with `/tpahere`
+* Return to your previous location with `/back`
+* Return to a death location with `/dback`
+* Teleport to public warps with `/warp`
+* Teleport to personal homes with `/home`
 * Dialog, clickable chat, and double-sneak response modes
 * Handle requests from multiple players independently
 * Whitelist auto-accept and blacklist auto-deny
@@ -33,5 +37,5 @@ Paper is recommended for the most complete native dialog experience.
 ## 📖 Next Steps
 
 * Server owners: read [Getting Started](home/start.md)
-* Players: read [Teleport Requests](usage/requests.md) and [Personal Settings](usage/settings.md)
+* Players: read [Teleport Requests](usage/requests.md), [Return Locations](usage/back.md), [Warp Teleportation](usage/warp.md), [Personal Homes](usage/home.md), and [Personal Settings](usage/settings.md)
 * Network owners: read [Cross-Server Teleportation](config/proxy.md)

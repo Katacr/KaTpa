@@ -39,6 +39,38 @@ commands:
     usage: /tpasetting
     aliases: [tpasettings]
     permission: katpa.setting
+  back:
+    description: 返回上次位置
+    usage: /back
+    permission: katpa.back
+  dback:
+    description: 返回死亡位置
+    usage: /dback [序号]
+    permission: katpa.dback
+  warp:
+    description: 传送到地标
+    usage: /warp [名称]
+    permission: katpa.warp
+  setwarp:
+    description: 创建或更新地标
+    usage: /setwarp [名称]
+    permission: katpa.warp.admin
+  delwarp:
+    description: 删除地标
+    usage: /delwarp [名称]
+    permission: katpa.warp.admin
+  home:
+    description: 传送到个人家
+    usage: /home [名称]
+    permission: katpa.home
+  sethome:
+    description: 创建或更新个人家
+    usage: /sethome [名称]
+    permission: katpa.home
+  delhome:
+    description: 删除个人家
+    usage: /delhome [名称]
+    permission: katpa.home
 
 permissions:
   katpa.use:
@@ -53,3 +85,18 @@ permissions:
   katpa.cooldown.bypass:
     description: 允许绕过传送请求冷却
     default: op
+  katpa.back:
+    description: 允许使用 /back 返回上次位置
+    default: true
+  katpa.dback:
+    description: 允许使用 /dback 返回死亡位置
+    default: true
+  katpa.warp:
+    description: 允许使用 /warp 传送到地标
+    default: true
+  katpa.warp.admin:
+    description: 允许使用 /setwarp 和 /delwarp 管理地标
+    default: op
+  katpa.home:
+    description: 允许使用 /home、/sethome 和 /delhome 管理个人家
+    default: true

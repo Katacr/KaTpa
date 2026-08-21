@@ -62,7 +62,7 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
     private void sendHelp(CommandSender sender) {
         plugin.messages().sendComponent(sender,
                 plugin.messages().component("help.header", Map.of(), false));
-        for (String key : List.of("tpa", "tpahere", "tpaccept", "tpdeny", "tpacancel", "settings", "reload")) {
+        for (String key : List.of("tpa", "tpahere", "tpaccept", "tpdeny", "tpacancel", "settings", "back", "dback", "warp", "setwarp", "home", "sethome", "reload")) {
             plugin.messages().sendComponent(sender,
                     plugin.messages().component("help." + key, Map.of(), false));
         }

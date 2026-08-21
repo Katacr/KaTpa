@@ -35,6 +35,8 @@ import org.katacr.katpa.model.NetworkPlayer;
 import org.katacr.katpa.model.RelationEntry;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.model.TeleportRequest;
+import org.katacr.katpa.model.Home;
+import org.katacr.katpa.model.Warp;
 import org.katacr.katpa.ui.InteractionPlatform;
 import org.katacr.katpa.ui.InteractionService;
 
@@ -361,9 +363,270 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
                 Map.of("list", listName), false), bodyText, buttons, 3);
     }
 
+    /** 显示地标选择 Dialog，列出玩家有权限使用的全部地标。 */
+    @Override
+    public void showWarpSelector(Player player) {
+        clearCallbacks(player.getUniqueId());
+        List<ActionButton> buttons = plugin.warpStore().all().stream()
+                .filter(warp -> warp.permission().isBlank() || player.hasPermission(warp.permission()))
+                .map(warp -> button(player, Component.text(warp.name()),
+                        Component.text(warp.server()),
+                        () -> plugin.warp().warp(player, warp.name())))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        Component title = plugin.messages().component("ui.warp.selector-title", Map.of(), false);
+        Component bodyText = buttons.isEmpty()
+                ? plugin.messages().component("ui.warp.empty", Map.of(), false)
+                : plugin.messages().component("ui.warp.count",
+                Map.of("count", Integer.toString(buttons.size())), false);
+        showActionDialog(player, title, bodyText, buttons, 3);
+    }
+
+    /** 显示管理员地标管理 Dialog，列出全部地标并提供编辑入口。 */
+    @Override
+    public void showWarpManager(Player player) {
+        clearCallbacks(player.getUniqueId());
+        List<DialogBody> body = new ArrayList<>();
+        body.add(new PlainMessageBody(text(plugin.messages().component(
+                "ui.warp.manager-title", Map.of(), false)), 400));
+        List<ActionButton> buttons = new ArrayList<>();
+        for (Warp warp : plugin.warpStore().all()) {
+            buttons.add(button(player, Component.text(warp.name()),
+                    Component.text(warp.server() + " / " + warp.world()),
+                    () -> reopen(player, () -> showWarpEditor(player, warp))));
+        }
+        buttons.add(button(player, plugin.messages().component("ui.warp.add", Map.of(), false),
+                null, () -> reopen(player, () -> showWarpCreateInput(player))));
+        showActionDialog(player, plugin.messages().component(
+                "ui.warp.manager-title", Map.of(), false), body, buttons, 3);
+    }
+
+    /** 显示创建新地标的名称输入 Dialog。 */
+    private void showWarpCreateInput(Player player) {
+        clearCallbacks(player.getUniqueId());
+        net.md_5.bungee.api.dialog.input.TextInput nameInput =
+                new net.md_5.bungee.api.dialog.input.TextInput("warp_name",
+                        text(plugin.messages().component("ui.warp.name-label", Map.of(), false)));
+        ActionButton save = new ActionButton(
+                text(plugin.messages().component("ui.warp.save", Map.of(), false)), null, null,
+                new CustomClickAction(registerCallback(player, (clicked, payload) -> {
+                    String name = primitiveString(payload, "warp_name");
+                    if (name == null || name.isBlank()) return;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        plugin.warp().setWarp(clicked, name.trim());
+                        reopen(player, () -> showWarpManager(player));
+                    });
+                })));
+        DialogBase base = new DialogBase(text(plugin.messages().component(
+                        "ui.warp.create-title", Map.of(), false)))
+                .body(List.of(new PlainMessageBody(text(plugin.messages().component(
+                        "ui.warp.create-hint", Map.of(), false)), 400)))
+                .inputs(List.<DialogInput>of(nameInput))
+                .canCloseWithEscape(true)
+                .pause(false)
+                .afterAction(DialogBase.AfterAction.CLOSE);
+        player.showDialog(new NoticeDialog(base, save));
+    }
+
+    /** 显示单个地标编辑 Dialog，可更新位置、权限、冷却和费用。 */
+    @Override
+    public void showWarpEditor(Player player, Warp warp) {
+        clearCallbacks(player.getUniqueId());
+        List<DialogBody> body = new ArrayList<>();
+        body.add(new PlainMessageBody(text(Component.text(warp.name())), 400));
+        body.add(new PlainMessageBody(new TextComponent(
+                "Server: " + warp.server() + "  World: " + warp.world()), 400));
+        body.add(new PlainMessageBody(new TextComponent(
+                String.format("XYZ: %.1f / %.1f / %.1f", warp.x(), warp.y(), warp.z())), 400));
+        body.add(new PlainMessageBody(new TextComponent(
+                "Permission: " + (warp.permission().isBlank() ? "(none)" : warp.permission())), 400));
+        body.add(new PlainMessageBody(new TextComponent(
+                "Cooldown: " + warp.cooldownSeconds() + "s  Cost: " + String.format("%.2f", warp.cost())), 400));
+        List<ActionButton> buttons = new ArrayList<>();
+        buttons.add(button(player, plugin.messages().component("ui.warp.update-location", Map.of(), false), null,
+                () -> {
+                    plugin.warp().updateLocation(player, warp.name());
+                    plugin.messages().send(player, "warp-location-updated", Map.of("name", warp.name()));
+                    reopen(player, () -> showWarpManager(player));
+                }));
+        buttons.add(button(player, plugin.messages().component("ui.warp.set-permission", Map.of(), false), null,
+                () -> reopen(player, () -> showWarpPermissionInput(player, warp))));
+        buttons.add(button(player, plugin.messages().component("ui.warp.set-cooldown", Map.of(), false), null,
+                () -> reopen(player, () -> showWarpCooldownInput(player, warp))));
+        buttons.add(button(player, plugin.messages().component("ui.warp.set-cost", Map.of(), false), null,
+                () -> reopen(player, () -> showWarpCostInput(player, warp))));
+        buttons.add(button(player, plugin.messages().component("ui.warp.delete", Map.of(), false), null,
+                () -> {
+                    plugin.warp().delWarp(player, warp.name());
+                    reopen(player, () -> showWarpManager(player));
+                }));
+        buttons.add(button(player, plugin.messages().component("ui.warp.back-list", Map.of(), false), null,
+                () -> reopen(player, () -> showWarpManager(player))));
+        showActionDialog(player, plugin.messages().component(
+                "ui.warp.editor-title", Map.of("name", warp.name()), false), body, buttons, 2);
+    }
+
+    /** 显示权限输入 Dialog。 */
+    private void showWarpPermissionInput(Player player, Warp warp) {
+        clearCallbacks(player.getUniqueId());
+        net.md_5.bungee.api.dialog.input.TextInput input =
+                new net.md_5.bungee.api.dialog.input.TextInput("warp_permission",
+                        text(plugin.messages().component("ui.warp.permission-label", Map.of(), false)));
+        ActionButton save = new ActionButton(
+                text(plugin.messages().component("ui.warp.save", Map.of(), false)), null, null,
+                new CustomClickAction(registerCallback(player, (clicked, payload) -> {
+                    String perm = primitiveString(payload, "warp_permission");
+                    if (perm == null) perm = "";
+                    String finalPerm = perm.trim();
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        plugin.warp().setPermission(warp.name(), finalPerm);
+                        plugin.messages().send(player, "warp-permission-updated",
+                                Map.of("name", warp.name(), "permission", finalPerm));
+                        reopen(player, () -> showWarpEditor(player, plugin.warpStore().find(warp.name())));
+                    });
+                })));
+        DialogBase base = new DialogBase(text(plugin.messages().component(
+                        "ui.warp.permission-title", Map.of("name", warp.name()), false)))
+                .body(List.of(new PlainMessageBody(text(plugin.messages().component(
+                        "ui.warp.permission-hint", Map.of(), false)), 400)))
+                .inputs(List.<DialogInput>of(input))
+                .canCloseWithEscape(true)
+                .pause(false)
+                .afterAction(DialogBase.AfterAction.CLOSE);
+        player.showDialog(new NoticeDialog(base, save));
+    }
+
+    /** 显示冷却输入 Dialog。 */
+    private void showWarpCooldownInput(Player player, Warp warp) {
+        clearCallbacks(player.getUniqueId());
+        net.md_5.bungee.api.dialog.input.TextInput input =
+                new net.md_5.bungee.api.dialog.input.TextInput("warp_cooldown",
+                        text(plugin.messages().component("ui.warp.cooldown-label", Map.of(), false)));
+        ActionButton save = new ActionButton(
+                text(plugin.messages().component("ui.warp.save", Map.of(), false)), null, null,
+                new CustomClickAction(registerCallback(player, (clicked, payload) -> {
+                    String valueStr = primitiveString(payload, "warp_cooldown");
+                    if (valueStr == null) return;
+                    try {
+                        int cooldown = Integer.parseInt(valueStr.trim());
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            plugin.warp().setCooldown(warp.name(), Math.max(0, cooldown));
+                            plugin.messages().send(player, "warp-cooldown-updated",
+                                    Map.of("name", warp.name(), "seconds", Integer.toString(Math.max(0, cooldown))));
+                            reopen(player, () -> showWarpEditor(player, plugin.warpStore().find(warp.name())));
+                        });
+                    } catch (NumberFormatException ignored) {
+                    }
+                })));
+        DialogBase base = new DialogBase(text(plugin.messages().component(
+                        "ui.warp.cooldown-title", Map.of("name", warp.name()), false)))
+                .body(List.of())
+                .inputs(List.<DialogInput>of(input))
+                .canCloseWithEscape(true)
+                .pause(false)
+                .afterAction(DialogBase.AfterAction.CLOSE);
+        player.showDialog(new NoticeDialog(base, save));
+    }
+
+    /** 显示费用输入 Dialog。 */
+    private void showWarpCostInput(Player player, Warp warp) {
+        clearCallbacks(player.getUniqueId());
+        net.md_5.bungee.api.dialog.input.TextInput input =
+                new net.md_5.bungee.api.dialog.input.TextInput("warp_cost",
+                        text(plugin.messages().component("ui.warp.cost-label", Map.of(), false)));
+        ActionButton save = new ActionButton(
+                text(plugin.messages().component("ui.warp.save", Map.of(), false)), null, null,
+                new CustomClickAction(registerCallback(player, (clicked, payload) -> {
+                    String valueStr = primitiveString(payload, "warp_cost");
+                    if (valueStr == null) return;
+                    try {
+                        double cost = Double.parseDouble(valueStr.trim());
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            plugin.warp().setCost(warp.name(), Math.max(0, cost));
+                            plugin.messages().send(player, "warp-cost-updated",
+                                    Map.of("name", warp.name(), "cost", String.format("%.2f", Math.max(0, cost))));
+                            reopen(player, () -> showWarpEditor(player, plugin.warpStore().find(warp.name())));
+                        });
+                    } catch (NumberFormatException ignored) {
+                    }
+                })));
+        DialogBase base = new DialogBase(text(plugin.messages().component(
+                        "ui.warp.cost-title", Map.of("name", warp.name()), false)))
+                .body(List.of())
+                .inputs(List.<DialogInput>of(input))
+                .canCloseWithEscape(true)
+                .pause(false)
+                .afterAction(DialogBase.AfterAction.CLOSE);
+        player.showDialog(new NoticeDialog(base, save));
+    }
+
+    /** 显示玩家个人家选择 Dialog，列出玩家全部家。 */
+    @Override
+    public void showHomeSelector(Player player) {
+        clearCallbacks(player.getUniqueId());
+        List<ActionButton> buttons = plugin.homeStore().all(player.getUniqueId()).stream()
+                .map(home -> button(player, Component.text(home.name()),
+                        Component.text(home.server()),
+                        () -> plugin.home().home(player, home.name())))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        Component title = plugin.messages().component("ui.home.selector-title", Map.of(), false);
+        Component bodyText = buttons.isEmpty()
+                ? plugin.messages().component("ui.home.empty", Map.of(), false)
+                : plugin.messages().component("ui.home.count",
+                Map.of("count", Integer.toString(buttons.size())), false);
+        showActionDialog(player, title, bodyText, buttons, 3);
+    }
+
+    /** 显示玩家个人家管理 Dialog，列出全部家并提供创建和删除入口。 */
+    @Override
+    public void showHomeManager(Player player) {
+        clearCallbacks(player.getUniqueId());
+        List<DialogBody> body = new ArrayList<>();
+        body.add(new PlainMessageBody(text(plugin.messages().component(
+                "ui.home.manager-title", Map.of(), false)), 400));
+        List<ActionButton> buttons = new ArrayList<>();
+        for (Home home : plugin.homeStore().all(player.getUniqueId())) {
+            buttons.add(button(player, Component.text(home.name()),
+                    Component.text(home.server() + " / " + home.world()),
+                    () -> {
+                        plugin.home().delHome(player, home.name());
+                        reopen(player, () -> showHomeManager(player));
+                    }));
+        }
+        buttons.add(button(player, plugin.messages().component("ui.home.add", Map.of(), false),
+                null, () -> reopen(player, () -> showHomeCreateInput(player))));
+        showActionDialog(player, plugin.messages().component(
+                "ui.home.manager-title", Map.of(), false), body, buttons, 3);
+    }
+
+    /** 显示创建新家的名称输入 Dialog。 */
+    private void showHomeCreateInput(Player player) {
+        clearCallbacks(player.getUniqueId());
+        net.md_5.bungee.api.dialog.input.TextInput nameInput =
+                new net.md_5.bungee.api.dialog.input.TextInput("home_name",
+                        text(plugin.messages().component("ui.home.name-label", Map.of(), false)));
+        ActionButton save = new ActionButton(
+                text(plugin.messages().component("ui.home.save", Map.of(), false)), null, null,
+                new CustomClickAction(registerCallback(player, (clicked, payload) -> {
+                    String name = primitiveString(payload, "home_name");
+                    if (name == null || name.isBlank()) return;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        plugin.home().setHome(clicked, name.trim());
+                        reopen(player, () -> showHomeManager(player));
+                    });
+                })));
+        DialogBase base = new DialogBase(text(plugin.messages().component(
+                        "ui.home.create-title", Map.of(), false)))
+                .body(List.of(new PlainMessageBody(text(plugin.messages().component(
+                        "ui.home.create-hint", Map.of(), false)), 400)))
+                .inputs(List.<DialogInput>of(nameInput))
+                .canCloseWithEscape(true)
+                .pause(false)
+                .afterAction(DialogBase.AfterAction.CLOSE);
+        player.showDialog(new NoticeDialog(base, save));
+    }
+
     /** 向聊天框发送可点击的同意与拒绝文本，复用命令路径。 */
-    private void showChatActions(Player receiver, String senderName, TeleportRequest request, String messageKey) {
-        TextComponent message = new TextComponent(text(plugin.messages().component(
+    private void showChatActions(Player receiver, String senderName, TeleportRequest request, String messageKey) {        TextComponent message = new TextComponent(text(plugin.messages().component(
                 messageKey, Map.of("player", senderName), true)));
         message.addExtra("  ");
         message.addExtra(command(

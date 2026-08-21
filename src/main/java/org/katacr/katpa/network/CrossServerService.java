@@ -6,11 +6,13 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.katacr.katpa.KaTpaPlugin;
+import org.katacr.katpa.model.LocationRecord;
 import org.katacr.katpa.model.NetworkPlayer;
 import org.katacr.katpa.model.NetworkRequestData;
 import org.katacr.katpa.model.RequestType;
 
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /** 管理 KaTpa 后端的 KaProxy 通道、全服玩家快照和跨服事务消息。 */
 public final class CrossServerService implements PluginMessageListener {
@@ -89,7 +92,7 @@ public final class CrossServerService implements PluginMessageListener {
     /** 返回本服和代理快照合并后的在线玩家列表。 */
     public List<NetworkPlayer> onlinePlayers() {
         Map<UUID, NetworkPlayer> merged = new LinkedHashMap<>();
-        if (available()) {
+        if (enabled()) {
             synchronized (onlinePlayers) {
                 merged.putAll(onlinePlayers);
             }
@@ -174,6 +177,29 @@ public final class CrossServerService implements PluginMessageListener {
         });
     }
 
+    /** 请求代理将玩家切服并传送到指定位置。 */
+    public boolean backRequest(Player player, String targetServer, LocationRecord location,
+                               Consumer<Boolean> callback) {
+        boolean sent = send(player, "back", "back_request", output -> {
+            output.writeUTF(targetServer);
+            writeLocation(output, location);
+        });
+        if (!sent) {
+            callback.accept(false);
+        }
+        return sent;
+    }
+
+    /** 向代理通知跨服返回传送已完成。 */
+    public boolean backArrivalComplete(Player player) {
+        return send(player, "back", "back_arrival_complete", output -> { });
+    }
+
+    /** 向代理通知跨服返回传送失败。 */
+    public boolean backArrivalFailed(Player player, String reason) {
+        return send(player, "back", "back_arrival_failed", output -> output.writeUTF(reason));
+    }
+
     /** 解码代理事件并在 Bukkit 主线程内交给请求服务。 */
     @Override
     public void onPluginMessageReceived(@NotNull String channel, @NotNull Player carrier,
@@ -187,6 +213,10 @@ public final class CrossServerService implements PluginMessageListener {
             lastPresenceAt = System.currentTimeMillis();
             if ("core".equals(packet.module()) && "presence".equals(packet.action())) {
                 readPresence(packet.input());
+                return;
+            }
+            if ("back".equals(packet.module())) {
+                handleBack(carrier, packet.action(), packet.input());
                 return;
             }
             if (!"tpa".equals(packet.module())) {
@@ -233,6 +263,45 @@ public final class CrossServerService implements PluginMessageListener {
                     KaProxyProtocol.readUuid(input), input.readUTF(), input.readLong());
             default -> plugin.getLogger().fine("忽略未知 KaTpa 代理动作: " + action);
         }
+    }
+
+    /** 路由 back 模块动作。 */
+    private void handleBack(Player carrier, String action, DataInputStream input) throws IOException {
+        switch (action) {
+            case "back_arrival" -> {
+                LocationRecord location = readLocation(input);
+                plugin.back().handleArrival(carrier, location);
+            }
+            case "back_failed" -> {
+                String reason = input.readUTF();
+                plugin.messages().send(carrier, "back-failed",
+                        Map.of("reason", plugin.messages().text("network-reason." + reason)));
+            }
+            default -> plugin.getLogger().fine("忽略未知 back 代理动作: " + action);
+        }
+    }
+
+    /** 写入位置记录到协议流。 */
+    private static void writeLocation(DataOutputStream output, LocationRecord loc) throws IOException {
+        output.writeUTF(loc.world());
+        output.writeDouble(loc.x());
+        output.writeDouble(loc.y());
+        output.writeDouble(loc.z());
+        output.writeFloat(loc.yaw());
+        output.writeFloat(loc.pitch());
+        output.writeLong(loc.timestamp());
+    }
+
+    /** 从协议流读取位置记录（server 由目标服自行填充）。 */
+    private static LocationRecord readLocation(DataInputStream input) throws IOException {
+        String world = input.readUTF();
+        double x = input.readDouble();
+        double y = input.readDouble();
+        double z = input.readDouble();
+        float yaw = input.readFloat();
+        float pitch = input.readFloat();
+        long timestamp = input.readLong();
+        return new LocationRecord("local", world, x, y, z, yaw, pitch, timestamp);
     }
 
     /** 读取代理事件携带的完整请求上下文。 */

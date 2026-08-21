@@ -7,6 +7,8 @@ import org.katacr.katpa.model.AcceptMode;
 import org.katacr.katpa.model.ListType;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.model.TeleportRequest;
+import org.katacr.katpa.model.Home;
+import org.katacr.katpa.model.Warp;
 
 import java.util.UUID;
 
@@ -46,6 +48,21 @@ public interface InteractionPlatform {
 
     /** 显示某一名单的现有成员、快捷移除入口和添加成员按钮。 */
     void showRelationEditor(Player player, ListType type);
+
+    /** 显示地标选择 Dialog，列出玩家可用地标。 */
+    void showWarpSelector(Player player);
+
+    /** 显示管理员地标管理 Dialog。 */
+    void showWarpManager(Player player);
+
+    /** 显示单个地标编辑 Dialog。 */
+    void showWarpEditor(Player player, Warp warp);
+
+    /** 显示玩家个人家选择 Dialog，列出玩家的全部家。 */
+    void showHomeSelector(Player player);
+
+    /** 显示玩家个人家管理 Dialog，列出全部家并提供创建和删除入口。 */
+    void showHomeManager(Player player);
 
     /** 插件关闭时释放平台实现持有的状态。 */
     void shutdown();

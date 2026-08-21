@@ -8,6 +8,9 @@ language: zh_CN
 proxy:
   enabled: false
 
+# 子服标识，跨服模式下用于记录玩家所在服务器。所有子服需唯一。
+server-id: local
+
 # 玩家接受模式、已知玩家和名单存储。跨服网络建议所有子服连接同一个 MySQL 数据库。
 storage:
   type: sqlite

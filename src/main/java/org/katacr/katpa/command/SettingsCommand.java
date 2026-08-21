@@ -14,6 +14,7 @@ import org.katacr.katpa.KaTpaPlugin;
 import org.katacr.katpa.model.AcceptMode;
 import org.katacr.katpa.model.KnownPlayer;
 import org.katacr.katpa.model.ListType;
+import org.katacr.katpa.model.NetworkPlayer;
 
 import java.util.List;
 import java.util.Locale;
@@ -75,7 +76,9 @@ public final class SettingsCommand implements CommandExecutor, TabCompleter {
             return filter(List.of("add", "remove"), args[1]);
         }
         if (args.length == 3 && parseListType(args[0]) != null) {
-            return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[2]);
+            return filter(plugin.network().onlinePlayers().stream()
+                    .map(NetworkPlayer::name)
+                    .toList(), args[2]);
         }
         return List.of();
     }

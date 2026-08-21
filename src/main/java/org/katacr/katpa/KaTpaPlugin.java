@@ -2,21 +2,36 @@ package org.katacr.katpa;
 
 import net.byteflux.libby.BukkitLibraryManager;
 import net.byteflux.libby.Library;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.katacr.katpa.command.CancelCommand;
+import org.katacr.katpa.command.BackCommand;
+import org.katacr.katpa.command.DbackCommand;
 import org.katacr.katpa.command.KaTpaCommand;
 import org.katacr.katpa.command.ResponseCommand;
 import org.katacr.katpa.command.SettingsCommand;
+import org.katacr.katpa.command.HomeCommand;
+import org.katacr.katpa.command.SetHomeCommand;
+import org.katacr.katpa.command.SetWarpCommand;
 import org.katacr.katpa.command.TargetCommand;
+import org.katacr.katpa.command.WarpCommand;
 import org.katacr.katpa.listener.PlayerListener;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.network.CrossServerService;
+import org.katacr.katpa.service.BackService;
+import org.katacr.katpa.service.DbackService;
+import org.katacr.katpa.service.HomeService;
 import org.katacr.katpa.service.ParticleService;
 import org.katacr.katpa.service.RequestService;
 import org.katacr.katpa.service.SoundService;
 import org.katacr.katpa.service.TeleportService;
+import org.katacr.katpa.service.WarpService;
+import org.katacr.katpa.storage.BackStore;
+import org.katacr.katpa.storage.HomeStore;
 import org.katacr.katpa.storage.SettingsStore;
+import org.katacr.katpa.storage.WarpStore;
 import org.katacr.katpa.ui.InteractionService;
 import org.katacr.katpa.util.MessageService;
 
@@ -26,12 +41,20 @@ import java.io.File;
 public final class KaTpaPlugin extends JavaPlugin {
     private MessageService messages;
     private SettingsStore settings;
+    private BackStore backStore;
     private SoundService sounds;
     private ParticleService particles;
     private TeleportService teleports;
     private RequestService requests;
     private InteractionService interactions;
     private CrossServerService network;
+    private BackService back;
+    private DbackService dback;
+    private WarpStore warpStore;
+    private WarpService warp;
+    private HomeStore homeStore;
+    private HomeService home;
+    private Economy economy;
 
     /** 在插件启用前通过 Libby 下载并挂载 SQLite JDBC 运行时依赖。 */
     @Override
@@ -93,6 +116,29 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
         network = new CrossServerService(this);
         network.initialize();
+        backStore = new BackStore(this);
+        try {
+            backStore.initialize(settings.connection(), settings.isMysql());
+        } catch (Exception e) {
+            getLogger().severe("KaTpa 返回位置数据库初始化失败: " + e.getMessage());
+        }
+        back = new BackService(this);
+        dback = new DbackService(this);
+        warpStore = new WarpStore(this);
+        try {
+            warpStore.initialize(settings.connection(), settings.isMysql());
+        } catch (Exception e) {
+            getLogger().severe("KaTpa 地标数据库初始化失败: " + e.getMessage());
+        }
+        warp = new WarpService(this);
+        homeStore = new HomeStore(this);
+        try {
+            homeStore.initialize(settings.connection(), settings.isMysql());
+        } catch (Exception e) {
+            getLogger().severe("KaTpa 家位置数据库初始化失败: " + e.getMessage());
+        }
+        home = new HomeService(this);
+        setupEconomy();
         registerCommands();
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getOnlinePlayers().forEach(settings::rememberPlayer);
@@ -114,6 +160,15 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
         if (teleports != null) {
             teleports.shutdown();
+        }
+        if (backStore != null) {
+            backStore.close();
+        }
+        if (warpStore != null) {
+            warpStore.close();
+        }
+        if (homeStore != null) {
+            homeStore.close();
         }
         if (settings != null) {
             settings.close();
@@ -160,6 +215,58 @@ public final class KaTpaPlugin extends JavaPlugin {
         return network;
     }
 
+    /** 返回返回位置持久化存储。 */
+    public BackStore backStore() {
+        return backStore;
+    }
+
+    /** 返回 /back 上次位置服务。 */
+    public BackService back() {
+        return back;
+    }
+
+    /** 返回 /dback 死亡位置服务。 */
+    public DbackService dback() {
+        return dback;
+    }
+
+    /** 返回地标持久化存储。 */
+    public WarpStore warpStore() {
+        return warpStore;
+    }
+
+    /** 返回 /warp 地标传送服务。 */
+    public WarpService warp() {
+        return warp;
+    }
+
+    /** 返回玩家个人家持久化存储。 */
+    public HomeStore homeStore() {
+        return homeStore;
+    }
+
+    /** 返回 /home 家传送服务。 */
+    public HomeService home() {
+        return home;
+    }
+
+    /** 返回 Vault 经济接口，未安装时为 null。 */
+    public Economy economy() {
+        return economy;
+    }
+
+    /** 尝试挂载 Vault 经济接口，未安装时静默跳过。 */
+    private void setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            return;
+        }
+        RegisteredServiceProvider<Economy> registration = getServer().getServicesManager().getRegistration(Economy.class);
+        if (registration != null) {
+            economy = registration.getProvider();
+            getLogger().info("已挂载 Vault 经济接口。");
+        }
+    }
+
     /** 注册主命令和六组玩家指令及其补全器。 */
     private void registerCommands() {
         KaTpaCommand mainCommand = new KaTpaCommand(this);
@@ -177,6 +284,27 @@ public final class KaTpaPlugin extends JavaPlugin {
         command("tpacancel").setExecutor(new CancelCommand(this));
         command("tpasetting").setExecutor(settingsCommand);
         command("tpasetting").setTabCompleter(settingsCommand);
+        command("back").setExecutor(new BackCommand(this));
+        command("dback").setExecutor(new DbackCommand(this));
+        command("dback").setTabCompleter(new DbackCommand(this));
+        WarpCommand warpCommand = new WarpCommand(this);
+        command("warp").setExecutor(warpCommand);
+        command("warp").setTabCompleter(warpCommand);
+        SetWarpCommand setWarpCommand = new SetWarpCommand(this, false);
+        command("setwarp").setExecutor(setWarpCommand);
+        command("setwarp").setTabCompleter(setWarpCommand);
+        SetWarpCommand delWarpCommand = new SetWarpCommand(this, true);
+        command("delwarp").setExecutor(delWarpCommand);
+        command("delwarp").setTabCompleter(delWarpCommand);
+        HomeCommand homeCommand = new HomeCommand(this);
+        command("home").setExecutor(homeCommand);
+        command("home").setTabCompleter(homeCommand);
+        SetHomeCommand setHomeCommand = new SetHomeCommand(this, false);
+        command("sethome").setExecutor(setHomeCommand);
+        command("sethome").setTabCompleter(setHomeCommand);
+        SetHomeCommand delHomeCommand = new SetHomeCommand(this, true);
+        command("delhome").setExecutor(delHomeCommand);
+        command("delhome").setTabCompleter(delHomeCommand);
     }
 
     /** 获取 plugin.yml 中必须存在的指令，缺失时立即报告配置错误。 */

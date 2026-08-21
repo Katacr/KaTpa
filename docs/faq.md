@@ -31,3 +31,27 @@
 ## 为什么会出现 `players.db-wal` 和 `players.db-shm`
 
 KaTpa 默认使用单文件模式，正常情况下只会保留 `players.db`。如果这些临时文件曾被其他工具创建，请先正常关闭服务器再检查；不要在服务器运行时删除数据库文件。
+
+## `/back` 提示没有可返回的位置
+
+如果玩家从未被传送过、从未离线过，或上次位置所在世界已卸载，则无法返回。跨服模式下还需确保 KaProxy 的 Back 模块已启用。
+
+## `/dback` 只能返回一个死亡位置
+
+默认权限 `katpa.dback.amount.1` 只允许保存 1 个死亡位置。在权限插件中授予 `katpa.dback.amount.3` 或更大数值即可增加保存数量。
+
+## 跨服 `/back` 或 `/dback` 失败
+
+请检查：KaProxy 的 Back 模块已启用、`proxy.enabled` 为 `true`、目标子服在线且世界已加载。
+
+## `/warp` 提示余额不足
+
+该地标设置了传送费用，需要安装 Vault 经济插件且账户余额充足。管理员可通过 `/setwarp` 管理对话框调整或取消费用。
+
+## `/sethome` 提示达到数量上限
+
+默认权限 `katpa.home.amount.1` 只允许设置 1 个家。在权限插件中授予 `katpa.home.amount.3` 或更大数值即可增加数量。
+
+## `/warp` 或 `/home` 跨服传送失败
+
+跨服地标和家传送复用 KaProxy 的 Back 模块。请确保 Back 模块已启用、`proxy.enabled` 为 `true`、目标子服在线且世界已加载。
