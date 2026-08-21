@@ -289,6 +289,7 @@ public final class TeleportService {
             return;
         }
         Location target = destination.getLocation().clone();
+        plugin.back().markOwnTeleport(traveler.getUniqueId());
         traveler.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (error != null || !Boolean.TRUE.equals(success)) {
                 plugin.messages().send(traveler, "teleport-failed");

@@ -81,6 +81,7 @@ public final class BackService {
             plugin.network().backArrivalFailed(player, "world-unloaded");
             return;
         }
+        markOwnTeleport(player.getUniqueId());
         player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
             pendingBack.remove(player.getUniqueId());
             if (error != null || !Boolean.TRUE.equals(success)) {
