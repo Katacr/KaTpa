@@ -18,9 +18,9 @@ public final class HomeService {
         this.plugin = plugin;
     }
 
-    /** 根据权限 katpa.home.amount.&lt;n&gt; 返回玩家可设置的家数量上限，默认 1。 */
+    /** 根据权限 katpa.home.amount.&lt;n&gt; 返回玩家可设置的家数量上限，无权限时取配置默认值。 */
     public int maxHomes(Player player) {
-        int max = 1;
+        int max = plugin.getConfig().getInt("modules.home.default-amount", 1);
         for (var perm : player.getEffectivePermissions()) {
             String prefix = "katpa.home.amount.";
             if (perm.getValue() && perm.getPermission().startsWith(prefix)) {
@@ -44,9 +44,7 @@ public final class HomeService {
             plugin.messages().send(player, "teleport-busy");
             return;
         }
-        String currentServer = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String currentServer = plugin.network().serverId();
         if (home.server().equals(currentServer) || !plugin.network().enabled()) {
             teleportLocal(player, home);
             return;
@@ -70,9 +68,7 @@ public final class HomeService {
             return false;
         }
         Location loc = player.getLocation();
-        String server = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String server = plugin.network().serverId();
         Home home = new Home(player.getUniqueId(), name, server, loc.getWorld().getName(),
                 loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch(),
                 System.currentTimeMillis());
@@ -105,16 +101,18 @@ public final class HomeService {
             return;
         }
         plugin.back().recordLocation(player);
-        plugin.back().markOwnTeleport(player.getUniqueId());
-        player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (error != null || !Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "teleport-failed");
-                return;
-            }
-            plugin.sounds().playAt(target, "teleport");
-            plugin.messages().sendActionBar(player,
-                    plugin.messages().component("home-success", Map.of("name", home.name()), false));
-        }));
+        plugin.teleports().beginDirect(player, "home", () -> {
+            plugin.back().markOwnTeleport(player.getUniqueId());
+            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                if (error != null || !Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "teleport-failed");
+                    return;
+                }
+                plugin.sounds().playAt(target, "teleport", "home");
+                plugin.messages().sendActionBar(player,
+                        plugin.messages().component("home-success", Map.of("name", home.name()), false));
+            }));
+        });
     }
 
     /** 跨服家传送：通过 KaProxy 切服后在目标服落点。 */

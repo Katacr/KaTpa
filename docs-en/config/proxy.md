@@ -46,6 +46,8 @@ storage:
 
 Replace the sample database address and credentials, and use the same database settings on every backend. Restart all backend servers afterward.
 
+In cross-server mode, the real server ID of each backend is obtained automatically from KaProxy—no need to manually configure `server-id`. The `server-id` in `config.yml` is only used for single-server mode or as a display name in the UI.
+
 ## Player Experience
 
 Once enabled, the `/tpa` and `/tpahere` player dialogs contain players from the entire network. `/back` and `/dback` can also return across servers, and `/warp` and `/home` support cross-server teleportation too—the proxy switches the player to the target backend and teleports them to the exact coordinates. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers.

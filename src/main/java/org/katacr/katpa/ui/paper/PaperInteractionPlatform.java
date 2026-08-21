@@ -793,7 +793,7 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
 
     /** 创建设置与请求交互共用的单次回调生命周期参数。 */
     private ClickCallback.Options callbackOptions() {
-        int lifetime = Math.max(300, plugin.getConfig().getInt("request-timeout-seconds", 30) + 5);
+        int lifetime = Math.max(300, plugin.getConfig().getInt("modules.tpa.request-timeout-seconds", 30) + 5);
         return ClickCallback.Options.builder()
                 .uses(1)
                 .lifetime(Duration.ofSeconds(lifetime))
@@ -802,7 +802,7 @@ public final class PaperInteractionPlatform implements InteractionPlatform, Inte
 
     /** 创建仅覆盖请求有效期的列表文本回调参数。 */
     private ClickCallback.Options requestCallbackOptions() {
-        int lifetime = Math.max(5, plugin.getConfig().getInt("request-timeout-seconds", 30) + 5);
+        int lifetime = Math.max(5, plugin.getConfig().getInt("modules.tpa.request-timeout-seconds", 30) + 5);
         return ClickCallback.Options.builder()
                 .uses(1)
                 .lifetime(Duration.ofSeconds(lifetime))

@@ -105,8 +105,10 @@ public final class KaTpaPlugin extends JavaPlugin {
 
         sounds = new SoundService(this);
         particles = new ParticleService(this);
-        teleports = new TeleportService(this);
-        requests = new RequestService(this);
+        if (moduleEnabled("tpa")) {
+            teleports = new TeleportService(this);
+            requests = new RequestService(this);
+        }
         try {
             interactions = new InteractionService(this);
         } catch (RuntimeException | LinkageError exception) {
@@ -116,34 +118,48 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
         network = new CrossServerService(this);
         network.initialize();
-        backStore = new BackStore(this);
-        try {
-            backStore.initialize(settings.connection(), settings.isMysql());
-        } catch (Exception e) {
-            getLogger().severe("KaTpa 返回位置数据库初始化失败: " + e.getMessage());
+        if (moduleEnabled("back") || moduleEnabled("dback")) {
+            backStore = new BackStore(this);
+            try {
+                backStore.initialize(settings.connection(), settings.isMysql());
+            } catch (Exception e) {
+                getLogger().severe("KaTpa 返回位置数据库初始化失败: " + e.getMessage());
+            }
         }
-        back = new BackService(this);
-        dback = new DbackService(this);
-        warpStore = new WarpStore(this);
-        try {
-            warpStore.initialize(settings.connection(), settings.isMysql());
-        } catch (Exception e) {
-            getLogger().severe("KaTpa 地标数据库初始化失败: " + e.getMessage());
+        if (moduleEnabled("back")) {
+            back = new BackService(this);
         }
-        warp = new WarpService(this);
-        homeStore = new HomeStore(this);
-        try {
-            homeStore.initialize(settings.connection(), settings.isMysql());
-        } catch (Exception e) {
-            getLogger().severe("KaTpa 家位置数据库初始化失败: " + e.getMessage());
+        if (moduleEnabled("dback")) {
+            dback = new DbackService(this);
         }
-        home = new HomeService(this);
+        if (moduleEnabled("warp")) {
+            warpStore = new WarpStore(this);
+            try {
+                warpStore.initialize(settings.connection(), settings.isMysql());
+            } catch (Exception e) {
+                getLogger().severe("KaTpa 地标数据库初始化失败: " + e.getMessage());
+            }
+            warp = new WarpService(this);
+        }
+        if (moduleEnabled("home")) {
+            homeStore = new HomeStore(this);
+            try {
+                homeStore.initialize(settings.connection(), settings.isMysql());
+            } catch (Exception e) {
+                getLogger().severe("KaTpa 家位置数据库初始化失败: " + e.getMessage());
+            }
+            home = new HomeService(this);
+        }
         setupEconomy();
         registerCommands();
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getOnlinePlayers().forEach(settings::rememberPlayer);
+        var enabledModules = java.util.stream.Stream.of("tpa", "back", "dback", "warp", "home")
+                .filter(this::moduleEnabled)
+                .toList();
         getLogger().info("KaTpa 已启用：" + interactions.platformName()
                 + " Dialog、聊天交互、双击潜行和 SQLite 设置已就绪。");
+        getLogger().info("已启用模块：" + (enabledModules.isEmpty() ? "无" : String.join(", ", enabledModules)));
     }
 
     /** 停止所有临时任务并等待数据库写入完成。 */
@@ -255,6 +271,11 @@ public final class KaTpaPlugin extends JavaPlugin {
         return economy;
     }
 
+    /** 返回指定功能模块是否在配置中启用。 */
+    public boolean moduleEnabled(String module) {
+        return getConfig().getBoolean("modules." + module + ".enabled", true);
+    }
+
     /** 尝试挂载 Vault 经济接口，未安装时静默跳过。 */
     private void setupEconomy() {
         if (getServer().getPluginManager().getPlugin("Vault") == null) {
@@ -267,44 +288,75 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
     }
 
-    /** 注册主命令和六组玩家指令及其补全器。 */
+    /** 注册主命令和各功能模块指令及其补全器，已关闭模块注册统一提示。 */
     private void registerCommands() {
         KaTpaCommand mainCommand = new KaTpaCommand(this);
-        TargetCommand tpa = new TargetCommand(this, RequestType.TPA);
-        TargetCommand tpaHere = new TargetCommand(this, RequestType.TPA_HERE);
-        SettingsCommand settingsCommand = new SettingsCommand(this);
         command("katap").setExecutor(mainCommand);
         command("katap").setTabCompleter(mainCommand);
-        command("tpa").setExecutor(tpa);
-        command("tpa").setTabCompleter(tpa);
-        command("tpahere").setExecutor(tpaHere);
-        command("tpahere").setTabCompleter(tpaHere);
-        command("tpaccept").setExecutor(new ResponseCommand(this, true));
-        command("tpdeny").setExecutor(new ResponseCommand(this, false));
-        command("tpacancel").setExecutor(new CancelCommand(this));
-        command("tpasetting").setExecutor(settingsCommand);
-        command("tpasetting").setTabCompleter(settingsCommand);
-        command("back").setExecutor(new BackCommand(this));
-        command("dback").setExecutor(new DbackCommand(this));
-        command("dback").setTabCompleter(new DbackCommand(this));
-        WarpCommand warpCommand = new WarpCommand(this);
-        command("warp").setExecutor(warpCommand);
-        command("warp").setTabCompleter(warpCommand);
-        SetWarpCommand setWarpCommand = new SetWarpCommand(this, false);
-        command("setwarp").setExecutor(setWarpCommand);
-        command("setwarp").setTabCompleter(setWarpCommand);
-        SetWarpCommand delWarpCommand = new SetWarpCommand(this, true);
-        command("delwarp").setExecutor(delWarpCommand);
-        command("delwarp").setTabCompleter(delWarpCommand);
-        HomeCommand homeCommand = new HomeCommand(this);
-        command("home").setExecutor(homeCommand);
-        command("home").setTabCompleter(homeCommand);
-        SetHomeCommand setHomeCommand = new SetHomeCommand(this, false);
-        command("sethome").setExecutor(setHomeCommand);
-        command("sethome").setTabCompleter(setHomeCommand);
-        SetHomeCommand delHomeCommand = new SetHomeCommand(this, true);
-        command("delhome").setExecutor(delHomeCommand);
-        command("delhome").setTabCompleter(delHomeCommand);
+        if (moduleEnabled("tpa")) {
+            TargetCommand tpa = new TargetCommand(this, RequestType.TPA);
+            TargetCommand tpaHere = new TargetCommand(this, RequestType.TPA_HERE);
+            SettingsCommand settingsCommand = new SettingsCommand(this);
+            command("tpa").setExecutor(tpa);
+            command("tpa").setTabCompleter(tpa);
+            command("tpahere").setExecutor(tpaHere);
+            command("tpahere").setTabCompleter(tpaHere);
+            command("tpaccept").setExecutor(new ResponseCommand(this, true));
+            command("tpdeny").setExecutor(new ResponseCommand(this, false));
+            command("tpacancel").setExecutor(new CancelCommand(this));
+            command("tpasetting").setExecutor(settingsCommand);
+            command("tpasetting").setTabCompleter(settingsCommand);
+        } else {
+            disabledCommand("tpa", "tpahere", "tpaccept", "tpdeny", "tpacancel", "tpasetting");
+        }
+        if (moduleEnabled("back")) {
+            command("back").setExecutor(new BackCommand(this));
+        } else {
+            disabledCommand("back");
+        }
+        if (moduleEnabled("dback")) {
+            DbackCommand dbackCommand = new DbackCommand(this);
+            command("dback").setExecutor(dbackCommand);
+            command("dback").setTabCompleter(dbackCommand);
+        } else {
+            disabledCommand("dback");
+        }
+        if (moduleEnabled("warp")) {
+            WarpCommand warpCommand = new WarpCommand(this);
+            command("warp").setExecutor(warpCommand);
+            command("warp").setTabCompleter(warpCommand);
+            SetWarpCommand setWarpCommand = new SetWarpCommand(this, false);
+            command("setwarp").setExecutor(setWarpCommand);
+            command("setwarp").setTabCompleter(setWarpCommand);
+            SetWarpCommand delWarpCommand = new SetWarpCommand(this, true);
+            command("delwarp").setExecutor(delWarpCommand);
+            command("delwarp").setTabCompleter(delWarpCommand);
+        } else {
+            disabledCommand("warp", "setwarp", "delwarp");
+        }
+        if (moduleEnabled("home")) {
+            HomeCommand homeCommand = new HomeCommand(this);
+            command("home").setExecutor(homeCommand);
+            command("home").setTabCompleter(homeCommand);
+            SetHomeCommand setHomeCommand = new SetHomeCommand(this, false);
+            command("sethome").setExecutor(setHomeCommand);
+            command("sethome").setTabCompleter(setHomeCommand);
+            SetHomeCommand delHomeCommand = new SetHomeCommand(this, true);
+            command("delhome").setExecutor(delHomeCommand);
+            command("delhome").setTabCompleter(delHomeCommand);
+        } else {
+            disabledCommand("home", "sethome", "delhome");
+        }
+    }
+
+    /** 为已关闭模块的指令注册统一"功能已关闭"提示执行器。 */
+    private void disabledCommand(String... names) {
+        for (String name : names) {
+            command(name).setExecutor((sender, cmd, label, args) -> {
+                messages().send(sender, "module-disabled");
+                return true;
+            });
+        }
     }
 
     /** 获取 plugin.yml 中必须存在的指令，缺失时立即报告配置错误。 */

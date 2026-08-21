@@ -718,7 +718,7 @@ public final class SpigotInteractionPlatform implements InteractionPlatform, Int
     private String registerCallback(Player player, CallbackAction action) {
         String key = new NamespacedKey(plugin,
                 "dialog_" + Long.toString(callbackSequence.incrementAndGet(), 36)).toString();
-        int lifetime = Math.max(300, plugin.getConfig().getInt("request-timeout-seconds", 30) + 5);
+        int lifetime = Math.max(300, plugin.getConfig().getInt("modules.tpa.request-timeout-seconds", 30) + 5);
         CallbackSession session = new CallbackSession(player.getUniqueId(), action,
                 System.currentTimeMillis() + lifetime * 1000L);
         callbacks.put(key, session);

@@ -40,9 +40,7 @@ public final class WarpService {
             plugin.messages().send(player, "warp-insufficient-funds", Map.of("cost", String.format("%.2f", warp.cost())));
             return;
         }
-        String currentServer = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String currentServer = plugin.network().serverId();
         if (warp.server().equals(currentServer) || !plugin.network().enabled()) {
             teleportLocal(player, warp);
             return;
@@ -61,18 +59,19 @@ public final class WarpService {
             return false;
         }
         Location loc = player.getLocation();
-        String server = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String server = plugin.network().serverId();
         Warp existing = plugin.warpStore().find(name);
         long now = System.currentTimeMillis();
         Warp warp = new Warp(
                 name, server, loc.getWorld().getName(),
                 loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch(),
-                existing != null ? existing.permission() : "",
-                existing != null ? existing.cooldownSeconds() : 0,
-                existing != null ? existing.cost() : 0,
+                existing != null ? existing.permission()
+                        : plugin.getConfig().getString("modules.warp.default-permission", ""),
+                existing != null ? existing.cooldownSeconds()
+                        : plugin.getConfig().getInt("modules.warp.default-cooldown", 0),
+                existing != null ? existing.cost()
+                        : plugin.getConfig().getDouble("modules.warp.default-cost", 0),
                 existing != null ? existing.createdAt() : now,
                 now);
         plugin.warpStore().save(warp);
@@ -128,9 +127,7 @@ public final class WarpService {
         Warp warp = plugin.warpStore().find(name);
         if (warp == null) return;
         Location loc = player.getLocation();
-        String server = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String server = plugin.network().serverId();
         plugin.warpStore().save(new Warp(warp.name(), server, loc.getWorld().getName(),
                 loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch(),
@@ -153,17 +150,19 @@ public final class WarpService {
             return;
         }
         plugin.back().recordLocation(player);
-        plugin.back().markOwnTeleport(player.getUniqueId());
         startCooldown(player, warp);
-        player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (error != null || !Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "teleport-failed");
-                return;
-            }
-            plugin.sounds().playAt(target, "teleport");
-            plugin.messages().sendActionBar(player,
-                    plugin.messages().component("warp-success", Map.of("name", warp.name()), false));
-        }));
+        plugin.teleports().beginDirect(player, "warp", () -> {
+            plugin.back().markOwnTeleport(player.getUniqueId());
+            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                if (error != null || !Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "teleport-failed");
+                    return;
+                }
+                plugin.sounds().playAt(target, "teleport", "warp");
+                plugin.messages().sendActionBar(player,
+                        plugin.messages().component("warp-success", Map.of("name", warp.name()), false));
+            }));
+        });
     }
 
     /** 跨服地标传送：通过 KaProxy 切服后在目标服落点。 */

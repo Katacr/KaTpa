@@ -69,7 +69,7 @@ public final class RequestService {
             plugin.messages().send(receiver, "blacklisted-receiver", Map.of("player", sender.getName()));
             return;
         }
-        plugin.sounds().play(receiver, "request-received");
+        plugin.sounds().play(receiver, "request-received", "tpa");
 
         UUID requestId = UUID.randomUUID();
         if (plugin.settings().hasRelation(receiver.getUniqueId(), sender.getUniqueId(), ListType.WHITELIST)) {
@@ -82,7 +82,7 @@ public final class RequestService {
             return;
         }
 
-        int timeoutSeconds = Math.max(1, plugin.getConfig().getInt("request-timeout-seconds", 30));
+        int timeoutSeconds = Math.max(1, plugin.getConfig().getInt("modules.tpa.request-timeout-seconds", 30));
         long createdAt = System.currentTimeMillis();
         BukkitTask timeoutTask = Bukkit.getScheduler().runTaskLater(
                 plugin, () -> expire(requestId), timeoutSeconds * 20L);
@@ -147,10 +147,10 @@ public final class RequestService {
         if (!plugin.teleports().canUseNetworkEndpoint(sender, true)) {
             return;
         }
-        int timeoutSeconds = Math.max(1, plugin.getConfig().getInt("request-timeout-seconds", 30));
-        int cooldownSeconds = plugin.getConfig().getBoolean("cooldown.enabled", true)
+        int timeoutSeconds = Math.max(1, plugin.getConfig().getInt("modules.tpa.request-timeout-seconds", 30));
+        int cooldownSeconds = plugin.getConfig().getBoolean("modules.tpa.cooldown.enabled", true)
                 && !sender.hasPermission("katpa.cooldown.bypass")
-                ? Math.max(0, plugin.getConfig().getInt("cooldown.seconds", 30)) : 0;
+                ? Math.max(0, plugin.getConfig().getInt("modules.tpa.cooldown.seconds", 30)) : 0;
         long createdAt = System.currentTimeMillis();
         TeleportRequest request = new TeleportRequest(UUID.randomUUID(), sender.getUniqueId(), receiver.id(), type,
                 createdAt, createdAt + timeoutSeconds * 1000L, null);
@@ -294,7 +294,7 @@ public final class RequestService {
             }
             return;
         }
-        plugin.sounds().play(receiver, "request-received");
+        plugin.sounds().play(receiver, "request-received", "tpa");
         if (plugin.settings().hasRelation(receiver.getUniqueId(), data.senderId(), ListType.WHITELIST)) {
             if (plugin.network().accept(receiver, request.id(), true)) {
                 remove(request);
@@ -482,7 +482,7 @@ public final class RequestService {
             return;
         }
         long now = System.currentTimeMillis();
-        long interval = Math.max(1, plugin.getConfig().getInt("double-sneak-interval-seconds", 2)) * 1000L;
+        long interval = Math.max(1, plugin.getConfig().getInt("modules.tpa.double-sneak-interval-seconds", 2)) * 1000L;
         if (state.lastPressAt > 0L && now - state.lastPressAt <= interval) {
             accept(player, request.id());
             return;
@@ -672,17 +672,17 @@ public final class RequestService {
 
     /** 返回玩家距离可再次请求的向上取整秒数，无冷却时返回零。 */
     private long cooldownRemaining(Player player) {
-        if (!plugin.getConfig().getBoolean("cooldown.enabled", true)
+        if (!plugin.getConfig().getBoolean("modules.tpa.cooldown.enabled", true)
                 || player.hasPermission("katpa.cooldown.bypass")) {
             return 0L;
         }
-        long cooldownMillis = Math.max(0, plugin.getConfig().getLong("cooldown.seconds", 30L)) * 1000L;
+        long cooldownMillis = Math.max(0, plugin.getConfig().getLong("modules.tpa.cooldown.seconds", 30L)) * 1000L;
         return cooldowns.remainingSeconds(player.getUniqueId(), System.currentTimeMillis(), cooldownMillis);
     }
 
     /** 在配置启用且玩家不能绕过时记录本次有效请求的冷却起点。 */
     private void startCooldown(Player player) {
-        if (plugin.getConfig().getBoolean("cooldown.enabled", true)
+        if (plugin.getConfig().getBoolean("modules.tpa.cooldown.enabled", true)
                 && !player.hasPermission("katpa.cooldown.bypass")) {
             cooldowns.start(player.getUniqueId(), System.currentTimeMillis());
         }

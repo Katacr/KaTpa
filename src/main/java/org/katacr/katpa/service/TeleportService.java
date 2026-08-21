@@ -38,7 +38,7 @@ public final class TeleportService {
             }
             return false;
         }
-        if (!plugin.getConfig().getBoolean("allow-cross-world", true)
+        if (!plugin.getConfig().getBoolean("modules.tpa.allow-cross-world", true)
                 && traveler.getWorld() != destination.getWorld()) {
             if (notifyTraveler) {
                 plugin.messages().send(traveler, "cross-world-disabled");
@@ -78,15 +78,15 @@ public final class TeleportService {
             return false;
         }
 
-        int warmupSeconds = Math.max(0, plugin.getConfig().getInt("warmup-seconds", 5));
+        int warmupSeconds = warmupSeconds("tpa");
         WarmupSession session = new WarmupSession(
-                traveler.getUniqueId(), destination.getUniqueId(), traveler.getLocation().clone(), warmupSeconds * 20);
+                traveler.getUniqueId(), destination.getUniqueId(), traveler.getLocation().clone(),
+                warmupSeconds * 20, "tpa", null, null);
         sessions.put(traveler.getUniqueId(), session);
         plugin.messages().sendActionBar(destination, plugin.messages().component(
                 "warmup-started-other", Map.of("player", traveler.getName()), false));
 
         BukkitTask task = new BukkitRunnable() {
-            /** 每 5 tick 验证会话并生成粒子，每秒显示倒计时，结束后执行传送。 */
             @Override
             public void run() {
                 if (sessions.get(session.travelerId) != session) {
@@ -103,11 +103,11 @@ public final class TeleportService {
                     finish(session, currentTraveler, currentDestination);
                     return;
                 }
-                plugin.particles().spawnWarmup(currentTraveler);
+                plugin.particles().spawnWarmup(currentTraveler, session.module);
                 if (session.ticksRemaining % 20 == 0) {
                     plugin.messages().sendActionBar(currentTraveler, plugin.messages().component(
                             "warmup", Map.of("seconds", Integer.toString(session.ticksRemaining / 20)), false));
-                    plugin.sounds().play(currentTraveler, "countdown");
+                    plugin.sounds().play(currentTraveler, "countdown", session.module);
                 }
                 session.ticksRemaining -= 5;
             }
@@ -125,12 +125,11 @@ public final class TeleportService {
         if (!canUseNetworkEndpoint(traveler, true)) {
             return false;
         }
-        int warmupSeconds = Math.max(0, plugin.getConfig().getInt("warmup-seconds", 5));
+        int warmupSeconds = warmupSeconds("tpa");
         WarmupSession session = new WarmupSession(traveler.getUniqueId(), request.destinationId(),
-                traveler.getLocation().clone(), warmupSeconds * 20, request.id());
+                traveler.getLocation().clone(), warmupSeconds * 20, "tpa", null, request.id());
         sessions.put(traveler.getUniqueId(), session);
         BukkitTask task = new BukkitRunnable() {
-            /** 验证跨服吟唱状态、播放反馈，并在完成后通知代理。 */
             @Override
             public void run() {
                 if (sessions.get(session.travelerId) != session) {
@@ -146,11 +145,54 @@ public final class TeleportService {
                     finishNetwork(session, currentTraveler);
                     return;
                 }
-                plugin.particles().spawnWarmup(currentTraveler);
+                plugin.particles().spawnWarmup(currentTraveler, session.module);
                 if (session.ticksRemaining % 20 == 0) {
                     plugin.messages().sendActionBar(currentTraveler, plugin.messages().component(
                             "warmup", Map.of("seconds", Integer.toString(session.ticksRemaining / 20)), false));
-                    plugin.sounds().play(currentTraveler, "countdown");
+                    plugin.sounds().play(currentTraveler, "countdown", session.module);
+                }
+                session.ticksRemaining -= 5;
+            }
+        }.runTaskTimer(plugin, 0L, 5L);
+        session.task = task;
+        return true;
+    }
+
+    /** 为固定目标位置的传送启动吟唱，结束后执行回调。用于 back/dback/warp/home。 */
+    public boolean beginDirect(Player traveler, String module, Runnable afterWarmup) {
+        if (isBusy(traveler.getUniqueId())) {
+            plugin.messages().send(traveler, "teleport-busy");
+            return false;
+        }
+        int warmupSeconds = warmupSeconds(module);
+        if (warmupSeconds <= 0) {
+            afterWarmup.run();
+            return true;
+        }
+        WarmupSession session = new WarmupSession(traveler.getUniqueId(), null,
+                traveler.getLocation().clone(), warmupSeconds * 20, module, afterWarmup, null);
+        sessions.put(traveler.getUniqueId(), session);
+        BukkitTask task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (sessions.get(session.travelerId) != session) {
+                    cancel();
+                    return;
+                }
+                Player currentTraveler = Bukkit.getPlayer(session.travelerId);
+                if (currentTraveler == null) {
+                    cancelSession(session, "teleport-cancelled-quit", true);
+                    return;
+                }
+                if (session.ticksRemaining <= 0) {
+                    finishDirect(session, currentTraveler);
+                    return;
+                }
+                plugin.particles().spawnWarmup(currentTraveler, session.module);
+                if (session.ticksRemaining % 20 == 0) {
+                    plugin.messages().sendActionBar(currentTraveler, plugin.messages().component(
+                            "warmup", Map.of("seconds", Integer.toString(session.ticksRemaining / 20)), false));
+                    plugin.sounds().play(currentTraveler, "countdown", session.module);
                 }
                 session.ticksRemaining -= 5;
             }
@@ -185,7 +227,8 @@ public final class TeleportService {
     /** 取消玩家作为旅行者或目的地参与的全部吟唱。 */
     public void cancelForPlayer(UUID playerId) {
         List<WarmupSession> affected = new ArrayList<>(sessions.values()).stream()
-                .filter(session -> session.travelerId.equals(playerId) || session.destinationId.equals(playerId))
+                .filter(session -> session.travelerId.equals(playerId)
+                        || (session.destinationId != null && session.destinationId.equals(playerId)))
                 .toList();
         affected.forEach(session -> cancelSession(session, "teleport-cancelled-quit", true));
     }
@@ -209,7 +252,7 @@ public final class TeleportService {
                 plugin.messages().send(traveler, "teleport-failed");
                 return;
             }
-            plugin.sounds().playAt(target, "teleport");
+            plugin.sounds().playAt(target, "teleport", session.module);
             plugin.messages().sendActionBar(traveler,
                     plugin.messages().component("teleport-success", Map.of(), false));
             if (destination.isOnline()) {
@@ -229,6 +272,15 @@ public final class TeleportService {
         }
     }
 
+    /** 完成固定位置的直接吟唱，执行回调。 */
+    private void finishDirect(WarmupSession session, Player traveler) {
+        sessions.remove(session.travelerId, session);
+        session.task.cancel();
+        if (session.afterWarmup != null) {
+            session.afterWarmup.run();
+        }
+    }
+
     /** 在目标服读取目的地玩家最新位置并完成跨服事务的最终传送。 */
     public void arriveNetwork(UUID requestId, Player traveler, Player destination) {
         if (!canUse(traveler, destination, false)) {
@@ -243,7 +295,7 @@ public final class TeleportService {
                 plugin.network().arrivalFailed(traveler, requestId, "teleport-failed");
                 return;
             }
-            plugin.sounds().playAt(target, "teleport");
+            plugin.sounds().playAt(target, "teleport", "tpa");
             plugin.messages().sendActionBar(traveler,
                     plugin.messages().component("teleport-success", Map.of(), false));
             if (destination.isOnline()) {
@@ -266,21 +318,31 @@ public final class TeleportService {
             return;
         }
         Player traveler = Bukkit.getPlayer(session.travelerId);
-        Player destination = Bukkit.getPlayer(session.destinationId);
         if (traveler != null) {
             plugin.messages().sendActionBar(traveler, messageKey);
             if (session.networkRequestId != null) {
                 plugin.network().warmupCancelled(traveler, session.networkRequestId, messageKey);
             }
         }
-        if (destination != null) {
-            plugin.messages().sendActionBar(destination, "teleport-cancelled-other");
+        if (session.destinationId != null) {
+            Player destination = Bukkit.getPlayer(session.destinationId);
+            if (destination != null) {
+                plugin.messages().sendActionBar(destination, "teleport-cancelled-other");
+            }
         }
+    }
+
+    /** 返回指定模块的吟唱秒数，模块未启用吟唱时返回 0。 */
+    private int warmupSeconds(String module) {
+        if (!plugin.getConfig().getBoolean("modules." + module + ".warmup", true)) {
+            return 0;
+        }
+        return Math.max(0, plugin.getConfig().getInt("modules." + module + ".warmup-seconds", 3));
     }
 
     /** 检查世界是否出现在禁用列表中。 */
     private boolean isDisabledWorld(String worldName) {
-        return plugin.getConfig().getStringList("disabled-worlds").contains(worldName);
+        return plugin.getConfig().getStringList("modules.tpa.disabled-worlds").contains(worldName);
     }
 
     /** 保存一次进行中的吟唱及其起点和倒计时任务。 */
@@ -288,22 +350,22 @@ public final class TeleportService {
         private final UUID travelerId;
         private final UUID destinationId;
         private final Location origin;
+        private final String module;
+        private final Runnable afterWarmup;
+        private final UUID networkRequestId;
         private int ticksRemaining;
         private BukkitTask task;
-        private final UUID networkRequestId;
 
-        /** 创建尚未绑定调度任务的吟唱状态。 */
-        private WarmupSession(UUID travelerId, UUID destinationId, Location origin, int ticksRemaining) {
-            this(travelerId, destinationId, origin, ticksRemaining, null);
-        }
-
-        /** 创建本地或跨服吟唱状态，并保存可选的代理事务 UUID。 */
-        private WarmupSession(UUID travelerId, UUID destinationId, Location origin, int ticksRemaining,
+        /** 创建吟唱状态。 */
+        private WarmupSession(UUID travelerId, UUID destinationId, Location origin,
+                              int ticksRemaining, String module, Runnable afterWarmup,
                               UUID networkRequestId) {
             this.travelerId = travelerId;
             this.destinationId = destinationId;
             this.origin = origin;
             this.ticksRemaining = ticksRemaining;
+            this.module = module;
+            this.afterWarmup = afterWarmup;
             this.networkRequestId = networkRequestId;
         }
     }

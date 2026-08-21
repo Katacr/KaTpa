@@ -35,9 +35,7 @@ public final class BackService {
     /** 记录玩家当前位置为上次位置，在传送、死亡和离线前调用。 */
     public void recordLocation(Player player) {
         Location loc = player.getLocation();
-        String server = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String server = plugin.network().serverId();
         LocationRecord record = new LocationRecord(
                 server, loc.getWorld().getName(),
                 loc.getX(), loc.getY(), loc.getZ(),
@@ -57,9 +55,7 @@ public final class BackService {
             plugin.messages().send(player, "teleport-busy");
             return;
         }
-        String currentServer = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String currentServer = plugin.network().serverId();
         if (record.server().equals(currentServer) || !plugin.network().enabled()) {
             teleportLocal(player, record);
             return;
@@ -92,7 +88,7 @@ public final class BackService {
                 plugin.network().backArrivalFailed(player, "teleport-failed");
                 return;
             }
-            plugin.sounds().playAt(target, "teleport");
+            plugin.sounds().playAt(target, "teleport", "back");
             plugin.messages().sendActionBar(player,
                     plugin.messages().component("back-success", java.util.Map.of(), false));
             plugin.network().backArrivalComplete(player);
@@ -115,16 +111,18 @@ public final class BackService {
             return;
         }
         recordLocation(player);
-        markOwnTeleport(player.getUniqueId());
-        player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (error != null || !Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "teleport-failed");
-                return;
-            }
-            plugin.sounds().playAt(target, "teleport");
-            plugin.messages().sendActionBar(player,
-                    plugin.messages().component("back-success", java.util.Map.of(), false));
-        }));
+        plugin.teleports().beginDirect(player, "back", () -> {
+            markOwnTeleport(player.getUniqueId());
+            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                if (error != null || !Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "teleport-failed");
+                    return;
+                }
+                plugin.sounds().playAt(target, "teleport", "back");
+                plugin.messages().sendActionBar(player,
+                        plugin.messages().component("back-success", java.util.Map.of(), false));
+            }));
+        });
     }
 
     /** 跨服返回：先记录当前位置，请求代理切服并在目标服落点。 */

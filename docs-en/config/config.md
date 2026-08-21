@@ -2,31 +2,89 @@
 
 KaTpa's functional settings are stored in `plugins/KaTpa/config.yml`.
 
-## Common Settings
+## Feature Modules
+
+Each feature module can be toggled independently. A disabled module does not initialize its service, register commands, or respond to events. Players running a disabled module's command will see a "this feature has been disabled by the administrator" message.
+
+```yaml
+modules:
+  tpa:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    request-timeout-seconds: 30
+    double-sneak-interval-seconds: 2
+    cooldown:
+      enabled: true
+      seconds: 30
+    allow-cross-world: true
+    disabled-worlds: []
+  back:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+  dback:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    default-amount: 1
+  warp:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    default-permission: ""
+    default-cooldown: 0
+    default-cost: 0
+  home:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    default-amount: 1
+```
 
 | Node | Default | Purpose |
 | --- | --- | --- |
-| `request-timeout-seconds` | `30` | Seconds before a pending request expires |
-| `language` | `zh_CN` | Language file selected from the `lang` folder |
-| `server-id` | `local` | Backend identifier used to record the player's server in cross-server mode |
-| `warmup-seconds` | `3` | Teleport warm-up after a request is accepted |
-| `double-sneak-interval-seconds` | `2` | Maximum delay between the two sneak presses |
-| `cooldown.enabled` | `true` | Enables the request cooldown |
-| `cooldown.seconds` | `30` | Required delay between valid outgoing requests |
-| `allow-cross-world` | `true` | Allows teleports between worlds |
-| `disabled-worlds` | `[]` | World names where KaTpa cannot be used |
+| `modules.tpa.enabled` | `true` | Teleport requests (/tpa, /tpahere, /tpaccept, /tpdeny, /tpacancel, /tpasetting) |
+| `modules.tpa.request-timeout-seconds` | `30` | Seconds before a pending request expires |
+| `modules.tpa.double-sneak-interval-seconds` | `2` | Maximum delay between the two sneak presses |
+| `modules.tpa.cooldown.enabled` | `true` | Enables the request cooldown |
+| `modules.tpa.cooldown.seconds` | `30` | Required delay between valid outgoing requests |
+| `modules.tpa.allow-cross-world` | `true` | Allows teleports between worlds |
+| `modules.tpa.disabled-worlds` | `[]` | World names where KaTpa cannot be used |
+| `modules.back.enabled` | `true` | Return to previous location (/back) |
+| `modules.dback.enabled` | `true` | Return to death location (/dback) |
+| `modules.dback.default-amount` | `1` | Default death location save count without `katpa.dback.amount.<n>` permission |
+| `modules.warp.enabled` | `true` | Public warp teleportation (/warp, /setwarp, /delwarp) |
+| `modules.warp.default-permission` | `""` | Default permission node for new warps; blank means unrestricted |
+| `modules.warp.default-cooldown` | `0` | Default cooldown in seconds for new warps |
+| `modules.warp.default-cost` | `0` | Default teleport cost for new warps |
+| `modules.home.enabled` | `true` | Personal home teleportation (/home, /sethome, /delhome) |
+| `modules.home.default-amount` | `1` | Default home limit without `katpa.home.amount.<n>` permission |
 
-Disabled-world example:
+Module toggle changes require a server restart to take effect.
 
-```yaml
-disabled-worlds:
-  - resource_world
-  - event_world
-```
+## Warmup, Sounds, and Particles
 
-World names are case-sensitive.
+The following three items are global configs shared by all modules. Each module can independently enable or disable them via `modules.<module>.warmup`, `modules.<module>.sounds`, and `modules.<module>.particles`.
 
-## Sounds
+| Node | Default | Purpose |
+| --- | --- | --- |
+| `modules.<module>.warmup` | `true` | Whether this module uses teleport warmup |
+| `modules.<module>.warmup-seconds` | `3` | Warmup countdown seconds for this module |
+| `modules.<module>.sounds` | `true` | Whether this module plays interaction sounds |
+| `modules.<module>.particles` | `true` | Whether this module shows warmup particles |
+
+### Sounds
 
 Three sound groups can be enabled, disabled, or replaced independently:
 
@@ -36,9 +94,16 @@ Three sound groups can be enabled, disabled, or replaced independently:
 
 Each group supports `enabled`, `sound`, `volume`, and `pitch`.
 
-## Particles
+### Particles
 
 `particles.warmup` controls the particles shown during teleport preparation. You can disable them or change their type, amount, and spread.
+
+## Global Settings
+
+| Node | Default | Purpose |
+| --- | --- | --- |
+| `language` | `zh_CN` | Language file selected from the `lang` folder |
+| `server-id` | `local` | Display name for UI purposes only. In cross-server mode, the real server ID is obtained automatically from KaProxy |
 
 ## Language Files
 

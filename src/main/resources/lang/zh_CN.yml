@@ -81,6 +81,12 @@ home-updated: "&a已更新家 &f{name}&a。"
 home-deleted: "&a已删除家 &f{name}&a。"
 home-success: "&a已回到家 &f{name}&a。"
 home-failed: "&c回家失败：{reason}"
+module-disabled: "&c该功能已被管理员关闭。"
+module-tpa: "传送请求"
+module-back: "返回位置"
+module-dback: "死亡返回"
+module-warp: "地标传送"
+module-home: "个人家"
 
 help:
   header: "&b&lKaTpa 指令帮助"

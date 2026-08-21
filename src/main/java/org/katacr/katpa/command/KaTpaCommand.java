@@ -58,11 +58,29 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
                 .toList();
     }
 
-    /** 从语言文件逐行发送完整的玩家指令帮助。 */
+    /** 从语言文件逐行发送已启用模块的玩家指令帮助。 */
     private void sendHelp(CommandSender sender) {
         plugin.messages().sendComponent(sender,
                 plugin.messages().component("help.header", Map.of(), false));
-        for (String key : List.of("tpa", "tpahere", "tpaccept", "tpdeny", "tpacancel", "settings", "back", "dback", "warp", "setwarp", "home", "sethome", "reload")) {
+        List<String> keys = new java.util.ArrayList<>(List.of("reload"));
+        if (plugin.moduleEnabled("tpa")) {
+            keys.addAll(0, List.of("tpa", "tpahere", "tpaccept", "tpdeny", "tpacancel", "settings"));
+        }
+        if (plugin.moduleEnabled("back")) {
+            keys.add(0, "back");
+        }
+        if (plugin.moduleEnabled("dback")) {
+            keys.add(0, "dback");
+        }
+        if (plugin.moduleEnabled("warp")) {
+            keys.add(0, "warp");
+            keys.add(0, "setwarp");
+        }
+        if (plugin.moduleEnabled("home")) {
+            keys.add(0, "home");
+            keys.add(0, "sethome");
+        }
+        for (String key : keys) {
             plugin.messages().sendComponent(sender,
                     plugin.messages().component("help." + key, Map.of(), false));
         }

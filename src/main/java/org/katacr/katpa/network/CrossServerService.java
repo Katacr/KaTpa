@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 public final class CrossServerService implements PluginMessageListener {
     private final KaTpaPlugin plugin;
     private final Map<UUID, NetworkPlayer> onlinePlayers = new LinkedHashMap<>();
+    private volatile String realServerId;
     private volatile boolean available;
     private volatile long lastPresenceAt;
     private boolean registered;
@@ -61,6 +62,7 @@ public final class CrossServerService implements PluginMessageListener {
         }
         onlinePlayers.clear();
         available = false;
+        realServerId = null;
         lastPresenceAt = 0L;
         if (heartbeatTask != null) {
             heartbeatTask.cancel();
@@ -71,6 +73,14 @@ public final class CrossServerService implements PluginMessageListener {
     /** 返回配置是否允许接入 KaProxy。 */
     public boolean enabled() {
         return plugin.getConfig().getBoolean("proxy.enabled", false);
+    }
+
+    /** 返回当前子服真实标识，由 KaProxy 提供；未连接代理时返回配置值。 */
+    public String serverId() {
+        if (enabled() && realServerId != null && !realServerId.isBlank()) {
+            return realServerId;
+        }
+        return plugin.getConfig().getString("server-id", "local");
     }
 
     /** 返回是否已经收到 KaProxy 的有效在线玩家快照。 */
@@ -216,10 +226,15 @@ public final class CrossServerService implements PluginMessageListener {
                 return;
             }
             if ("back".equals(packet.module())) {
-                handleBack(carrier, packet.action(), packet.input());
+                if (plugin.moduleEnabled("back") || plugin.moduleEnabled("dback")) {
+                    handleBack(carrier, packet.action(), packet.input());
+                }
                 return;
             }
             if (!"tpa".equals(packet.module())) {
+                return;
+            }
+            if (!plugin.moduleEnabled("tpa")) {
                 return;
             }
             handleTpa(carrier, packet.action(), packet.input());
@@ -228,8 +243,12 @@ public final class CrossServerService implements PluginMessageListener {
         }
     }
 
-    /** 更新代理提供的全服在线玩家快照。 */
+    /** 更新代理提供的全服在线玩家快照和当前子服真实标识。 */
     private void readPresence(DataInputStream input) throws IOException {
+        String yourServerName = input.readUTF();
+        if (!yourServerName.isBlank()) {
+            realServerId = yourServerName;
+        }
         int count = input.readInt();
         if (count < 0 || count > 100_000) {
             throw new IOException("在线玩家数量无效: " + count);

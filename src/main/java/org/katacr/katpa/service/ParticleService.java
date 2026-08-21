@@ -17,8 +17,11 @@ public final class ParticleService {
         this.plugin = plugin;
     }
 
-    /** 在旅行者身体周围生成一轮吟唱粒子。 */
-    public void spawnWarmup(Player player) {
+    /** 在旅行者身体周围生成一轮吟唱粒子，自动检查模块粒子开关。 */
+    public void spawnWarmup(Player player, String module) {
+        if (!plugin.getConfig().getBoolean("modules." + module + ".particles", true)) {
+            return;
+        }
         String path = "particles.warmup";
         if (!plugin.getConfig().getBoolean(path + ".enabled", true)) {
             return;

@@ -18,9 +18,9 @@ public final class DbackService {
         this.plugin = plugin;
     }
 
-    /** 根据权限 katpa.dback.amount.&lt;n&gt; 返回玩家可用的死亡位置个数，默认 1。 */
+    /** 根据权限 katpa.dback.amount.&lt;n&gt; 返回玩家可用的死亡位置个数，无权限时取配置默认值。 */
     public int maxSlots(Player player) {
-        int max = 1;
+        int max = plugin.getConfig().getInt("modules.dback.default-amount", 1);
         for (var perm : player.getEffectivePermissions()) {
             String prefix = "katpa.dback.amount.";
             if (perm.getValue() && perm.getPermission().startsWith(prefix)) {
@@ -36,9 +36,7 @@ public final class DbackService {
     /** 玩家死亡时记录死亡位置，按权限槽位滚动。 */
     public void recordDeath(Player player) {
         Location loc = player.getLocation();
-        String server = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String server = plugin.network().serverId();
         LocationRecord record = new LocationRecord(
                 server, loc.getWorld().getName(),
                 loc.getX(), loc.getY(), loc.getZ(),
@@ -65,9 +63,7 @@ public final class DbackService {
             plugin.messages().send(player, "teleport-busy");
             return;
         }
-        String currentServer = plugin.network().enabled()
-                ? plugin.getConfig().getString("server-id", "local")
-                : "local";
+        String currentServer = plugin.network().serverId();
         if (record.server().equals(currentServer) || !plugin.network().enabled()) {
             teleportLocal(player, record);
             return;
@@ -98,15 +94,17 @@ public final class DbackService {
             return;
         }
         plugin.back().recordLocation(player);
-        plugin.back().markOwnTeleport(player.getUniqueId());
-        player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (error != null || !Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "teleport-failed");
-                return;
-            }
-            plugin.sounds().playAt(target, "teleport");
-            plugin.messages().sendActionBar(player,
-                    plugin.messages().component("dback-success", Map.of(), false));
-        }));
+        plugin.teleports().beginDirect(player, "dback", () -> {
+            plugin.back().markOwnTeleport(player.getUniqueId());
+            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                if (error != null || !Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "teleport-failed");
+                    return;
+                }
+                plugin.sounds().playAt(target, "teleport", "dback");
+                plugin.messages().sendActionBar(player,
+                        plugin.messages().component("dback-success", Map.of(), false));
+            }));
+        });
     }
 }

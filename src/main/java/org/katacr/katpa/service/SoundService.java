@@ -22,24 +22,34 @@ public final class SoundService {
         this.plugin = plugin;
     }
 
-    /** 仅向指定玩家播放某个配置节点的音效。 */
-    public void play(Player player, String soundId) {
-        SoundSettings settings = settings(soundId);
-        if (settings == null) {
-            return;
-        }
-        player.playSound(player.getLocation(), settings.sound, SoundCategory.PLAYERS,
-                settings.volume, settings.pitch);
+    /** 仅向指定玩家播放某个配置节点的音效，自动检查模块音效开关。 */
+    public void play(Player player, String soundId, String module) {
+        if (!moduleSoundsEnabled(module)) return;
+        playInternal(player, null, soundId);
     }
 
-    /** 在指定位置播放某个配置节点的音效，让附近玩家都能听见。 */
-    public void playAt(Location location, String soundId) {
+    /** 在指定位置播放某个配置节点的音效，自动检查模块音效开关。 */
+    public void playAt(Location location, String soundId, String module) {
+        if (!moduleSoundsEnabled(module)) return;
+        playInternal(null, location, soundId);
+    }
+
+    /** 返回指定模块是否在配置中启用了音效。 */
+    private boolean moduleSoundsEnabled(String module) {
+        return plugin.getConfig().getBoolean("modules." + module + ".sounds", true);
+    }
+
+    /** 解析音效配置并播放到玩家或位置。 */
+    private void playInternal(Player player, Location location, String soundId) {
         SoundSettings settings = settings(soundId);
-        if (settings == null || location.getWorld() == null) {
-            return;
+        if (settings == null) return;
+        if (player != null) {
+            player.playSound(player.getLocation(), settings.sound, SoundCategory.PLAYERS,
+                    settings.volume, settings.pitch);
+        } else if (location != null && location.getWorld() != null) {
+            location.getWorld().playSound(location, settings.sound, SoundCategory.PLAYERS,
+                    settings.volume, settings.pitch);
         }
-        location.getWorld().playSound(location, settings.sound, SoundCategory.PLAYERS,
-                settings.volume, settings.pitch);
     }
 
     /** 解析并校验单个音效配置，禁用或无效时返回 null。 */

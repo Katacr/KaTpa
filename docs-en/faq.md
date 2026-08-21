@@ -55,3 +55,17 @@ The default permission `katpa.home.amount.1` only allows 1 home. Grant `katpa.ho
 ## Cross-server `/warp` or `/home` fails
 
 Cross-server warp and home teleportation reuses the KaProxy Back module. Make sure the Back module is enabled, `proxy.enabled` is `true`, the target backend is online, and the world is loaded.
+
+## How to disable unused features
+
+Set the corresponding module's `enabled` to `false` under the `modules` node in `plugins/KaTpa/config.yml`. For example, to disable warps and homes:
+
+```yaml
+modules:
+  warp:
+    enabled: false
+  home:
+    enabled: false
+```
+
+Restart the server after changing. Disabled modules do not register commands; players running the corresponding command will see a "this feature has been disabled by the administrator" message.

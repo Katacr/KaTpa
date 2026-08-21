@@ -55,3 +55,17 @@ KaTpa 默认使用单文件模式，正常情况下只会保留 `players.db`。�
 ## `/warp` 或 `/home` 跨服传送失败
 
 跨服地标和家传送复用 KaProxy 的 Back 模块。请确保 Back 模块已启用、`proxy.enabled` 为 `true`、目标子服在线且世界已加载。
+
+## 如何关闭不需要的功能
+
+在 `plugins/KaTpa/config.yml` 的 `modules` 节点中将对应模块的 `enabled` 设为 `false` 即可。例如关闭地标和家：
+
+```yaml
+modules:
+  warp:
+    enabled: false
+  home:
+    enabled: false
+```
+
+修改后重启服务器。关闭的模块不会注册指令，玩家执行对应指令时会收到"该功能已被管理员关闭"提示。
