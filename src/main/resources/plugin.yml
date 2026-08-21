@@ -4,9 +4,6 @@ main: org.katacr.katpa.KaTpaPlugin
 api-version: '1.21'
 description: 玩家传送请求、邀请与偏好管理
 authors: [katacr]
-libraries:
-  - net.kyori:adventure-text-serializer-legacy:4.23.0
-  - net.kyori:adventure-text-serializer-bungeecord:4.4.1
 
 commands:
   katap:

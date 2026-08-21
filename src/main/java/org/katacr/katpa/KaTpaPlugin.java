@@ -33,6 +33,7 @@ import org.katacr.katpa.storage.HomeStore;
 import org.katacr.katpa.storage.SettingsStore;
 import org.katacr.katpa.storage.WarpStore;
 import org.katacr.katpa.ui.InteractionService;
+import org.katacr.katpa.util.ConfigUpdater;
 import org.katacr.katpa.util.MessageService;
 
 import java.io.File;
@@ -92,6 +93,9 @@ public final class KaTpaPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        if (ConfigUpdater.checkAndUpdateConfig(this, new File(getDataFolder(), "config.yml"))) {
+            reloadConfig();
+        }
         messages = new MessageService(this);
         settings = new SettingsStore(this);
         try {

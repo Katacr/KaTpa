@@ -1,3 +1,6 @@
+# 配置文件版本，请勿手动修改。插件启动时自动检测并升级旧版配置。
+config-version: 1
+
 # 交互音效定义。sound 使用 Minecraft 注册表键。各模块可通过 modules.<模块>.sounds 控制是否启用。
 sounds:
   request-received:
