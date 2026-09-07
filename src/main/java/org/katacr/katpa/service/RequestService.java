@@ -97,17 +97,7 @@ public final class RequestService {
 
         AcceptMode mode = plugin.settings().mode(receiver.getUniqueId());
         int incomingCount = incoming(receiver.getUniqueId()).size();
-        if (mode == AcceptMode.DIALOG || mode == AcceptMode.SNEAK && incomingCount > 1) {
-            sneakStates.remove(receiver.getUniqueId());
-            plugin.interactions().showRequestList(receiver);
-        } else if (mode == AcceptMode.SNEAK) {
-            sneakStates.put(receiver.getUniqueId(), new SneakState(requestId, 0L));
-            plugin.interactions().presentRequest(receiver, sender.getName(), request, mode);
-            plugin.interactions().refreshRequestList(receiver);
-        } else {
-            plugin.interactions().presentRequest(receiver, sender.getName(), request, mode);
-            plugin.interactions().refreshRequestList(receiver);
-        }
+        presentRequestByMode(receiver, sender.getName(), request, mode, incomingCount);
     }
 
     /** 根据全服在线快照选择本服直连请求或 KaProxy 跨服请求。 */
@@ -179,7 +169,7 @@ public final class RequestService {
             plugin.interactions().showRequestList(receiver);
             return;
         }
-        TeleportRequest request = requestId == null ? requests.getFirst() : byId.get(requestId);
+        TeleportRequest request = requestId == null ? requests.get(0) : byId.get(requestId);
         if (request == null || !request.receiverId().equals(receiver.getUniqueId())) {
             plugin.messages().send(receiver, "request-stale");
             return;
@@ -219,7 +209,7 @@ public final class RequestService {
             plugin.interactions().showRequestList(receiver);
             return;
         }
-        TeleportRequest request = requestId == null ? requests.getFirst() : byId.get(requestId);
+        TeleportRequest request = requestId == null ? requests.get(0) : byId.get(requestId);
         if (request == null || !request.receiverId().equals(receiver.getUniqueId())) {
             plugin.messages().send(receiver, "request-stale");
             return;
@@ -301,7 +291,9 @@ public final class RequestService {
             }
             return;
         }
-        presentPending(receiver, data.senderName(), request);
+        AcceptMode mode = plugin.settings().mode(receiver.getUniqueId());
+        int incomingCount = incoming(receiver.getUniqueId()).size();
+        presentRequestByMode(receiver, data.senderName(), request, mode, incomingCount);
     }
 
     /** 接收代理创建确认，并用权威上下文替换发送端临时数据。 */
@@ -477,7 +469,7 @@ public final class RequestService {
             return;
         }
         SneakState state = sneakStates.get(player.getUniqueId());
-        TeleportRequest request = requests.isEmpty() ? null : requests.getFirst();
+        TeleportRequest request = requests.isEmpty() ? null : requests.get(0);
         if (state == null || request == null || !state.requestId.equals(request.id())) {
             return;
         }
@@ -548,20 +540,26 @@ public final class RequestService {
         plugin.interactions().sendCancellableRequestCreated(sender, receiverName, request, senderKey);
     }
 
-    /** 根据接受模式展示本地或跨服待处理请求。 */
-    private void presentPending(Player receiver, String senderName, TeleportRequest request) {
-        AcceptMode mode = plugin.settings().mode(receiver.getUniqueId());
-        int incomingCount = incoming(receiver.getUniqueId()).size();
-        if (mode == AcceptMode.DIALOG || mode == AcceptMode.SNEAK && incomingCount > 1) {
-            sneakStates.remove(receiver.getUniqueId());
-            plugin.interactions().showRequestList(receiver);
-        } else if (mode == AcceptMode.SNEAK) {
+    /** 根据接受模式展示待处理请求：DIALOG 弹窗口，CHAT/SNEAK 仅发提示不弹窗口。 */
+    private void presentRequestByMode(Player receiver, String senderName, TeleportRequest request,
+                                      AcceptMode mode, int incomingCount) {
+        if (mode == AcceptMode.SNEAK) {
             sneakStates.put(receiver.getUniqueId(), new SneakState(request.id(), 0L));
-            plugin.interactions().presentRequest(receiver, senderName, request, mode);
-            plugin.interactions().refreshRequestList(receiver);
         } else {
-            plugin.interactions().presentRequest(receiver, senderName, request, mode);
-            plugin.interactions().refreshRequestList(receiver);
+            sneakStates.remove(receiver.getUniqueId());
+        }
+        if (mode == AcceptMode.DIALOG) {
+            if (incomingCount >= 2) {
+                plugin.interactions().showRequestList(receiver);
+            } else {
+                plugin.interactions().presentRequest(receiver, senderName, request, mode);
+                plugin.interactions().refreshRequestList(receiver);
+            }
+        } else {
+            // CHAT / SNEAK：不弹窗口，仅提示接收者（sneak 已设置潜行双击状态）
+            String key = request.type() == RequestType.TPA_HERE
+                    ? "request-received-here" : "request-received-tpa";
+            plugin.messages().send(receiver, key, Map.of("player", senderName));
         }
     }
 
@@ -661,7 +659,7 @@ public final class RequestService {
         }
         List<TeleportRequest> remaining = incoming(request.receiverId());
         if (remaining.size() == 1 && plugin.settings().mode(request.receiverId()) == AcceptMode.SNEAK) {
-            sneakStates.put(request.receiverId(), new SneakState(remaining.getFirst().id(), 0L));
+            sneakStates.put(request.receiverId(), new SneakState(remaining.get(0).id(), 0L));
         } else {
             sneakStates.remove(request.receiverId());
         }

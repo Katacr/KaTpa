@@ -144,7 +144,7 @@ public final class BackStore {
         List<LocationRecord> current = new ArrayList<>(deathLocations.getOrDefault(playerId, List.of()));
         current.add(0, location);
         while (current.size() > maxSlots) {
-            current.removeLast();
+            current.remove(current.size() - 1);
         }
         deathLocations.put(playerId, List.copyOf(current));
         executeUpdate(() -> {

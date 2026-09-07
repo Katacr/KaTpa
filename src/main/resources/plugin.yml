@@ -1,7 +1,7 @@
 name: KaTpa
 version: '${version}'
 main: org.katacr.katpa.KaTpaPlugin
-api-version: '1.21'
+api-version: '1.16'
 description: 玩家传送请求、邀请与偏好管理
 authors: [katacr]
 
@@ -68,6 +68,10 @@ commands:
     description: 删除个人家
     usage: /delhome [名称]
     permission: katpa.home
+  pwarp:
+    description: 传送到玩家地标
+    usage: /pwarp [名称]
+    permission: katpa.pwarp.use
 
 permissions:
   katpa.use:
@@ -97,3 +101,12 @@ permissions:
   katpa.home:
     description: 允许使用 /home、/sethome 和 /delhome 管理个人家
     default: true
+  katpa.pwarp.use:
+    description: 允许使用 /pwarp 传送到玩家地标
+    default: true
+  katpa.pwarp.create:
+    description: 允许创建玩家地标
+    default: true
+  katpa.pwarp.admin:
+    description: 允许管理其他玩家创建的地标
+    default: op

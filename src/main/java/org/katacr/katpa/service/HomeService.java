@@ -8,6 +8,7 @@ import org.katacr.katpa.model.Home;
 import org.katacr.katpa.model.LocationRecord;
 
 import java.util.Map;
+import java.util.UUID;
 
 /** 管理玩家个人家位置传送，包含数量限制和跨服协调。 */
 public final class HomeService {
@@ -62,6 +63,11 @@ public final class HomeService {
             plugin.messages().send(player, "home-name-empty");
             return false;
         }
+        int maxLen = plugin.getConfig().getInt("modules.home.name-max-length", 32);
+        if (name.length() > maxLen) {
+            plugin.messages().send(player, "home-name-too-long", Map.of("max", Integer.toString(maxLen)));
+            return false;
+        }
         Home existing = plugin.homeStore().find(player.getUniqueId(), name);
         if (existing == null && plugin.homeStore().count(player.getUniqueId()) >= maxHomes(player)) {
             plugin.messages().send(player, "home-limit", Map.of("max", Integer.toString(maxHomes(player))));
@@ -69,9 +75,16 @@ public final class HomeService {
         }
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
-        Home home = new Home(player.getUniqueId(), name, server, loc.getWorld().getName(),
+        long now = System.currentTimeMillis();
+        Home home = new Home(
+                existing != null ? existing.id() : java.util.UUID.randomUUID(),
+                player.getUniqueId(), name, server, loc.getWorld().getName(),
                 loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch(),
-                System.currentTimeMillis());
+                existing != null ? existing.description() : "",
+                existing != null ? existing.iconMaterial() : "",
+                existing != null ? existing.iconCustomData() : null,
+                existing != null ? existing.iconItemModel() : "",
+                existing != null ? existing.createdAt() : now);
         plugin.homeStore().save(home);
         plugin.messages().send(player, existing != null ? "home-updated" : "home-created",
                 Map.of("name", name));
@@ -90,6 +103,46 @@ public final class HomeService {
         return true;
     }
 
+    /** 更新家的描述。 */
+    public void setDescription(UUID ownerId, String name, String description) {
+        Home home = plugin.homeStore().find(ownerId, name);
+        if (home == null) return;
+        int maxLen = plugin.getConfig().getInt("modules.home.description-max-length", 100);
+        if (description.length() > maxLen) {
+            return;
+        }
+        plugin.homeStore().save(build(home, b -> b.description(description)));
+    }
+
+    /** 重命名家，返回是否成功。 */
+    public boolean rename(UUID ownerId, String oldName, String newName) {
+        Home home = plugin.homeStore().find(ownerId, oldName);
+        if (home == null) return false;
+        int maxLen = plugin.getConfig().getInt("modules.home.name-max-length", 32);
+        if (newName.length() > maxLen) return false;
+        if (plugin.homeStore().find(ownerId, newName) != null) return false;
+        plugin.homeStore().remove(ownerId, oldName);
+        plugin.homeStore().save(build(home, b -> b.name(newName)));
+        return true;
+    }
+
+    /** 以玩家手中物品设置家图标。 */
+    public void setIcon(UUID ownerId, String name, org.bukkit.inventory.ItemStack item) {
+        Home home = plugin.homeStore().find(ownerId, name);
+        if (home == null) return;
+        String material = item.getType().name();
+        Integer customData = item.getItemMeta() != null && item.getItemMeta().hasCustomModelData()
+                ? item.getItemMeta().getCustomModelData() : null;
+        String itemModel = org.katacr.katpa.ui.inventory.gui.KaTpaGuiListProvider.readItemModelReflect(item.getItemMeta());
+        plugin.homeStore().save(build(home, b -> b.iconMaterial(material)
+                .iconCustomData(customData).iconItemModel(itemModel == null ? "" : itemModel)));
+    }
+
+    /** 基于现有 Home 复制字段并应用修改。 */
+    private Home build(Home home, java.util.function.UnaryOperator<HomeBuilder> fn) {
+        return fn.apply(new HomeBuilder(home)).build();
+    }
+
     /** 同服家传送。 */
     private void teleportLocal(Player player, Home home) {
         Location target = new Location(
@@ -103,15 +156,15 @@ public final class HomeService {
         plugin.back().recordLocation(player);
         plugin.teleports().beginDirect(player, "home", () -> {
             plugin.back().markOwnTeleport(player.getUniqueId());
-            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-                if (error != null || !Boolean.TRUE.equals(success)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.teleport(target)) {
                     plugin.messages().send(player, "teleport-failed");
                     return;
                 }
                 plugin.sounds().playAt(target, "teleport", "home");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("home-success", Map.of("name", home.name()), false));
-            }));
+            });
         });
     }
 
@@ -128,6 +181,51 @@ public final class HomeService {
             }
         })) {
             plugin.messages().send(player, "proxy-unavailable");
+        }
+    }
+
+    /** 基于现有 Home 复制全部字段的可变构造器。 */
+    private static final class HomeBuilder {
+        private final java.util.UUID id;
+        private final java.util.UUID ownerId;
+        private String name;
+        private final String server;
+        private final String world;
+        private final double x, y, z;
+        private final float yaw, pitch;
+        private String description;
+        private String iconMaterial;
+        private Integer iconCustomData;
+        private String iconItemModel;
+        private final long createdAt;
+
+        HomeBuilder(Home home) {
+            this.id = home.id();
+            this.ownerId = home.ownerId();
+            this.name = home.name();
+            this.server = home.server();
+            this.world = home.world();
+            this.x = home.x();
+            this.y = home.y();
+            this.z = home.z();
+            this.yaw = home.yaw();
+            this.pitch = home.pitch();
+            this.description = home.description();
+            this.iconMaterial = home.iconMaterial();
+            this.iconCustomData = home.iconCustomData();
+            this.iconItemModel = home.iconItemModel();
+            this.createdAt = home.createdAt();
+        }
+
+        HomeBuilder name(String v) { this.name = v; return this; }
+        HomeBuilder description(String v) { this.description = v; return this; }
+        HomeBuilder iconMaterial(String v) { this.iconMaterial = v; return this; }
+        HomeBuilder iconCustomData(Integer v) { this.iconCustomData = v; return this; }
+        HomeBuilder iconItemModel(String v) { this.iconItemModel = v; return this; }
+
+        Home build() {
+            return new Home(id, ownerId, name, server, world, x, y, z, yaw, pitch,
+                    description, iconMaterial, iconCustomData, iconItemModel, createdAt);
         }
     }
 }

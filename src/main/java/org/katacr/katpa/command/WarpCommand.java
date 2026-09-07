@@ -21,7 +21,7 @@ public final class WarpCommand implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
-    /** 无参数时打开地标选择 Dialog，有参数时传送到指定地标。 */
+    /** 无参数时打开地标选择菜单；否则传送到指定地标。 */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
@@ -46,11 +46,11 @@ public final class WarpCommand implements CommandExecutor, TabCompleter {
         }
         String prefix = args[0].toLowerCase(Locale.ROOT);
         return plugin.warpStore().all().stream()
-                .filter(warp -> warp.permission().isBlank()
+                .filter(w -> w.permission().isBlank()
                         || !(sender instanceof Player player)
-                        || player.hasPermission(warp.permission()))
+                        || player.hasPermission(w.permission()))
                 .map(org.katacr.katpa.model.Warp::name)
-                .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
+                .filter(n -> n.toLowerCase(Locale.ROOT).startsWith(prefix))
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
     }

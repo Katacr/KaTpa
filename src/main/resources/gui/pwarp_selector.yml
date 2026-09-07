@@ -1,0 +1,71 @@
+title: '&8KaTpa &f玩家地标'
+
+Layout:
+  - '#########'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#B####L#'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "1":
+    type: 'PWARP_LIST'
+    display:
+      material: '{pwarp_icon}'
+      custom_data: '{pwarp_custom_data}'
+      item_model: '{pwarp_item_model}'
+      empty_text: '暂无玩家地标'
+      name: '&a{pwarp_name}'
+      lore:
+        - '&7创建者: &f{pwarp_owner}'
+        - '&7描述: &f{pwarp_description}'
+        - '&7费用: &f{pwarp_cost}'
+        - '&7评分: &f{pwarp_stars}★ &7({pwarp_score}分)'
+        - ''
+        - '&a[左键] 传送'
+        - '&e[右键] 评分'
+    actions:
+      left:
+        - 'command: pwarp {pwarp_name}'
+        - 'close'
+      right:
+        - 'katpa: pwarp rate {pwarp_name}'
+  "B":
+    display:
+      material: ANVIL
+      name: '&a我的地标'
+      lore:
+        - '&7查看和管理你创建的地标'
+        - '&e点击管理'
+    actions:
+      left:
+        - 'open: pwarp_manager'
+  "L":
+    display:
+      material: NETHER_STAR
+      name: '&a排行榜'
+      lore:
+        - '&7查看评分最高的前十地标'
+        - '&e点击查看'
+    actions:
+      left:
+        - 'open: pwarp_leaderboard'
+  "<":
+    display:
+      material: ARROW
+      name: '&a上一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page prev'
+  ">":
+    display:
+      material: ARROW
+      name: '&a下一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page next'

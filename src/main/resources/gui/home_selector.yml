@@ -1,0 +1,48 @@
+title: '&8KaTpa &f家'
+
+Layout:
+  - '#########'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#<####>#'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "1":
+    type: 'HOME_LIST'
+    display:
+      material: RED_BED
+      empty_text: '暂无家'
+      name: '&a{home_name}'
+      lore:
+        - '&7世界: &f{home_world}'
+        - '&7服务器: &f{home_server}'
+        - ''
+        - '&a[左键] 传送'
+        - '&c[右键] 删除'
+    actions:
+      left:
+        - 'command: home {home_name}'
+        - 'close'
+      right:
+        - 'katpa: home delete {home_name}'
+        - 'close'
+  "<":
+    display:
+      material: ARROW
+      name: '&a上一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page prev'
+  ">":
+    display:
+      material: ARROW
+      name: '&a下一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page next'

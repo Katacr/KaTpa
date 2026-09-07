@@ -1,0 +1,68 @@
+title: '&8KaTpa &f地标管理'
+
+Layout:
+  - '########A'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#<####>X'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "1":
+    type: 'WARP_LIST'
+    display:
+      material: '{warp_icon}'
+      custom_data: '{warp_custom_data}'
+      item_model: '{warp_item_model}'
+      empty_text: '暂无地标，点击 A 新建'
+      name: '&a{warp_name}'
+      lore:
+        - '&7世界: &f{warp_world}'
+        - '&7服务器: &f{warp_server}'
+        - '&7冷却: &f{warp_cooldown}秒'
+        - '&7费用: &f{warp_cost}'
+        - '&7描述: &f{warp_description}'
+        - ''
+        - '&a[左键] 编辑'
+        - '&e[右键] 编辑'
+    actions:
+      left:
+        - 'katpa: warp edit {warp_name}'
+      right:
+        - 'katpa: warp edit {warp_name}'
+  "A":
+    display:
+      material: ANVIL
+      name: '&a新建地标'
+      lore:
+        - '&7点击后输入地标名称'
+        - '&e点击创建'
+    actions:
+      left:
+        - 'katpa: warp create'
+  "X":
+    display:
+      material: BARRIER
+      name: '&c关闭'
+    actions:
+      left:
+        - 'close'
+  "<":
+    display:
+      material: ARROW
+      name: '&a上一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page prev'
+  ">":
+    display:
+      material: ARROW
+      name: '&a下一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page next'

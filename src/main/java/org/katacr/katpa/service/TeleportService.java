@@ -247,8 +247,9 @@ public final class TeleportService {
             return;
         }
         Location target = destination.getLocation().clone();
-        traveler.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (error != null || !Boolean.TRUE.equals(success)) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            boolean success = traveler.teleport(target);
+            if (!success) {
                 plugin.messages().send(traveler, "teleport-failed");
                 return;
             }
@@ -259,7 +260,7 @@ public final class TeleportService {
                 plugin.messages().sendActionBar(destination, plugin.messages().component(
                         "teleport-success-other", Map.of("player", traveler.getName()), false));
             }
-        }));
+        });
     }
 
     /** 完成源服吟唱并通知 KaProxy 开始切服。 */
@@ -290,8 +291,9 @@ public final class TeleportService {
         }
         Location target = destination.getLocation().clone();
         plugin.back().markOwnTeleport(traveler.getUniqueId());
-        traveler.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (error != null || !Boolean.TRUE.equals(success)) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            boolean success = traveler.teleport(target);
+            if (!success) {
                 plugin.messages().send(traveler, "teleport-failed");
                 plugin.network().arrivalFailed(traveler, requestId, "teleport-failed");
                 return;
@@ -304,7 +306,7 @@ public final class TeleportService {
                         "teleport-success-other", Map.of("player", traveler.getName()), false));
             }
             plugin.network().arrivalComplete(traveler, requestId);
-        }));
+        });
     }
 
     /** 移除会话、停止计时并按需通知相关在线玩家。 */

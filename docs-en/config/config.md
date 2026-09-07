@@ -43,6 +43,8 @@ modules:
     default-permission: ""
     default-cooldown: 0
     default-cost: 0
+    name-max-length: 32
+    description-max-length: 100
   home:
     enabled: true
     warmup: true
@@ -50,6 +52,19 @@ modules:
     sounds: true
     particles: true
     default-amount: 1
+    name-max-length: 32
+    description-max-length: 100
+  pwarp:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    default-amount: 1
+    default-cost: 0
+    default-cooldown: 0
+    name-max-length: 32
+    description-max-length: 100
 ```
 
 | Node | Default | Purpose |
@@ -68,8 +83,18 @@ modules:
 | `modules.warp.default-permission` | `""` | Default permission node for new warps; blank means unrestricted |
 | `modules.warp.default-cooldown` | `0` | Default cooldown in seconds for new warps |
 | `modules.warp.default-cost` | `0` | Default teleport cost for new warps |
+| `modules.warp.name-max-length` | `32` | Maximum warp name length (validated on rename/create) |
+| `modules.warp.description-max-length` | `100` | Maximum warp description length (validated on set description) |
+| `modules.pwarp.enabled` | `true` | Player warp teleportation (/pwarp, /katap pwarp) |
+| `modules.pwarp.default-amount` | `1` | Default player warp creation limit without `katpa.pwarp.amount.<n>` permission |
+| `modules.pwarp.default-cost` | `0` | Default teleport cost for new player warps |
+| `modules.pwarp.default-cooldown` | `0` | Default cooldown in seconds for new player warps |
+| `modules.pwarp.name-max-length` | `32` | Maximum player warp name length (validated on rename/create) |
+| `modules.pwarp.description-max-length` | `100` | Maximum player warp description length (validated on set description) |
 | `modules.home.enabled` | `true` | Personal home teleportation (/home, /sethome, /delhome) |
 | `modules.home.default-amount` | `1` | Default home limit without `katpa.home.amount.<n>` permission |
+| `modules.home.name-max-length` | `32` | Maximum home name length (validated on rename/create) |
+| `modules.home.description-max-length` | `100` | Maximum home description length (validated on set description) |
 
 Module toggle changes require a server restart to take effect.
 

@@ -70,7 +70,7 @@ public final class SettingsCommand implements CommandExecutor, TabCompleter {
             return filter(List.of("mode", "whitelist", "blacklist", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
-            return filter(List.of("dialog", "chat", "sneak"), args[1]);
+            return filter(List.of("dialog", "chat", "sneak", "toggle"), args[1]);
         }
         if (args.length == 2 && parseListType(args[0]) != null) {
             return filter(List.of("add", "remove"), args[1]);
@@ -87,6 +87,18 @@ public final class SettingsCommand implements CommandExecutor, TabCompleter {
     private boolean handleMode(Player player, String[] args) {
         if (args.length != 2) {
             sendUsage(player);
+            return true;
+        }
+        if ("toggle".equalsIgnoreCase(args[1])) {
+            AcceptMode current = plugin.settings().mode(player.getUniqueId());
+            AcceptMode next = switch (current) {
+                case CHAT -> AcceptMode.DIALOG;
+                case DIALOG -> AcceptMode.SNEAK;
+                case SNEAK -> AcceptMode.CHAT;
+            };
+            plugin.settings().setMode(player, next);
+            plugin.messages().send(player, "mode-updated",
+                    Map.of("mode", plugin.messages().text(next.languageKey())));
             return true;
         }
         AcceptMode mode = AcceptMode.parse(args[1]);

@@ -8,10 +8,15 @@ import org.katacr.katpa.model.LocationRecord;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.function.Consumer;
 
 /** 管理 /dback 死亡位置记录、权限槽位和跨服返回传送。 */
 public final class DbackService {
     private final KaTpaPlugin plugin;
+    private final ConcurrentMap<UUID, Boolean> pendingDback = new ConcurrentHashMap<>();
 
     /** 创建绑定插件服务的死亡位置服务。 */
     public DbackService(KaTpaPlugin plugin) {
@@ -72,15 +77,21 @@ public final class DbackService {
             plugin.messages().send(player, "proxy-unavailable");
             return;
         }
+        // 跨服：先在本服完成吟唱，再请求代理切服（与 /back 行为对齐）
         plugin.back().recordLocation(player);
-        if (!plugin.network().backRequest(player, record.server(), record, success -> {
-            if (!Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "back-failed",
-                        Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+        pendingDback.put(player.getUniqueId(), true);
+        plugin.teleports().beginDirect(player, "dback", () -> {
+            if (!plugin.network().backRequest(player, record.server(), record, success -> {
+                if (!Boolean.TRUE.equals(success)) {
+                    pendingDback.remove(player.getUniqueId());
+                    plugin.messages().send(player, "back-failed",
+                            Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+                }
+            })) {
+                pendingDback.remove(player.getUniqueId());
+                plugin.messages().send(player, "proxy-unavailable");
             }
-        })) {
-            plugin.messages().send(player, "proxy-unavailable");
-        }
+        });
     }
 
     /** 同服直接传送。 */
@@ -96,15 +107,15 @@ public final class DbackService {
         plugin.back().recordLocation(player);
         plugin.teleports().beginDirect(player, "dback", () -> {
             plugin.back().markOwnTeleport(player.getUniqueId());
-            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-                if (error != null || !Boolean.TRUE.equals(success)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.teleport(target)) {
                     plugin.messages().send(player, "teleport-failed");
                     return;
                 }
                 plugin.sounds().playAt(target, "teleport", "dback");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("dback-success", Map.of(), false));
-            }));
+            });
         });
     }
 }

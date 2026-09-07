@@ -1,0 +1,63 @@
+title: '&8KaTpa &f设置'
+
+Layout:
+  - '#########'
+  - '#  A S  #'
+  - '#  W B  #'
+  - '#  X    #'
+  - '#########'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "A":
+    display:
+      material: PAPER
+      name: '&a接受方式: &f{mode_display}'
+      lore:
+        - '&7当前传送请求接受方式'
+        - '&7点击在 对话框 / 聊天 / 双击潜行 间切换'
+        - ''
+        - '&e点击切换'
+    actions:
+      left:
+        - 'katpa: setting mode toggle'
+  "S":
+    display:
+      material: BOOK
+      name: '&a设置主界面'
+      lore:
+        - '&7查看并接受方式、名单人数概况'
+        - '&e点击刷新'
+    actions:
+      left:
+        - 'open: settings'
+  "W":
+    display:
+      material: WRITABLE_BOOK
+      name: '&a白名单 &7({whitelist_count})'
+      lore:
+        - '&7当前自动同意的玩家数量'
+        - '&e点击管理白名单'
+    actions:
+      left:
+        - 'open: relation_editor:whitelist'
+  "B":
+    display:
+      material: BOOK
+      name: '&a黑名单 &7({blacklist_count})'
+      lore:
+        - '&7当前自动拒绝的玩家数量'
+        - '&e点击管理黑名单'
+    actions:
+      left:
+        - 'open: relation_editor:blacklist'
+  "X":
+    display:
+      material: BARRIER
+      name: '&c关闭'
+    actions:
+      left:
+        - 'close'

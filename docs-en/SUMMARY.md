@@ -7,6 +7,7 @@
   * [Return Locations](usage/back.md)
   * [Warp Teleportation](usage/warp.md)
   * [Personal Homes](usage/home.md)
+  * [Player Warps](usage/pwarp.md)
   * [Personal Settings](usage/settings.md)
 * [Server Configuration](config/README.md)
   * [Functional Settings](config/config.md)
@@ -14,4 +15,5 @@
 * [Commands & Permissions](perm/README.md)
   * [Commands](perm/commands.md)
   * [Permissions](perm/permissions.md)
+* [PlaceholderAPI Placeholders](placeholders.md)
 * [FAQ](faq.md)

@@ -11,6 +11,11 @@ Each player can set their own home locations and teleport to them using `/home`.
 
 Without a name, opens a home selection dialog listing all available homes. With a name, teleports directly to the specified home.
 
+Each home can have a description and icon configured (via the home management GUI):
+
+* **Description**: Explanatory text shown in the home list
+* **Icon**: Item shown in the list and editor (supports material, `custom_model_data`, and 1.21.4+ `item_model`)
+
 ## /sethome — Create or Manage Homes
 
 ```text

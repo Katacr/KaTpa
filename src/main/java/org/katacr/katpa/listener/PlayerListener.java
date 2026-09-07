@@ -44,6 +44,9 @@ public final class PlayerListener implements Listener {
                 plugin.getLogger().warning("加载玩家家位置失败: " + e.getMessage());
             }
         }
+        if (plugin.playerWarp() != null) {
+            plugin.playerWarp().claimPendingIncome(event.getPlayer());
+        }
     }
 
     /** 玩家离开服务器时取消其相关请求和吟唱，并记录上次位置供跨服返回。 */
@@ -63,8 +66,12 @@ public final class PlayerListener implements Listener {
     /** 玩家实际改变坐标时尝试中断传送吟唱，并在传送前记录上次位置。 */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        if (event.hasChangedPosition() && plugin.teleports() != null) {
-            plugin.teleports().handleMove(event.getPlayer(), event.getTo());
+        if (plugin.teleports() != null && event.getFrom() != null && event.getTo() != null) {
+            org.bukkit.Location from = event.getFrom();
+            org.bukkit.Location to = event.getTo();
+            if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
+                plugin.teleports().handleMove(event.getPlayer(), to);
+            }
         }
     }
 

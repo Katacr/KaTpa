@@ -58,6 +58,18 @@ public interface InteractionPlatform {
     /** 显示单个地标编辑 Dialog。 */
     void showWarpEditor(Player player, Warp warp);
 
+    /** 显示玩家地标选择列表（全局所有玩家地标）。 */
+    void showPwarpSelector(Player player);
+
+    /** 显示玩家自己的地标管理列表。 */
+    void showPwarpManager(Player player);
+
+    /** 显示单个玩家地标编辑界面。 */
+    void showPwarpEditor(Player player, org.katacr.katpa.model.PlayerWarp warp);
+
+    /** 显示玩家地标评分界面。 */
+    void showPwarpRate(Player player, org.katacr.katpa.model.PlayerWarp warp);
+
     /** 显示玩家个人家选择 Dialog，列出玩家的全部家。 */
     void showHomeSelector(Player player);
 

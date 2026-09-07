@@ -145,12 +145,16 @@ public final class MessageService {
         }
     }
 
-    /** 将 JAR 内置语言文件提取到磁盘（仅当文件不存在时）。 */
+    /** 将 JAR 内置语言文件提取到磁盘（仅当文件不存在且 JAR 中存在时）。 */
     private void saveDefaultLangFiles() {
         for (String lang : new String[]{"zh_CN", "en_US"}) {
-            File file = new File(plugin.getDataFolder(), "lang/" + lang + ".yml");
+            String path = "lang/" + lang + ".yml";
+            if (plugin.getResource(path) == null) {
+                continue;
+            }
+            File file = new File(plugin.getDataFolder(), path);
             if (!file.exists()) {
-                plugin.saveResource("lang/" + lang + ".yml", false);
+                plugin.saveResource(path, false);
             }
         }
     }

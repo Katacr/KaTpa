@@ -2,6 +2,8 @@
 
 Administrators can set up public warp points that players can teleport to using `/warp`.
 
+> `/warp` is for teleporting only and does not accept any admin subcommands. All warp editing is done via `/katap warp ...` or the in-GUI editor.
+
 ## /warp — Teleport to a Warp
 
 ```text
@@ -9,38 +11,44 @@ Administrators can set up public warp points that players can teleport to using 
 /warp <name>
 ```
 
-Without a name, opens a warp selection dialog listing all available warps. With a name, teleports directly to the specified warp.
+Without a name, opens a warp selection list showing all available warps (with description and icon). With a name, teleports directly to the specified warp.
 
 Each warp can have individually configured properties:
 
+* **Description**: Explanatory text shown in the warp list
+* **Icon**: Item shown in the list and editor (supports material, `custom_model_data`, and 1.21.4+ `item_model`)
 * **Permission**: Only players holding the specified permission node can teleport (leave blank for everyone)
 * **Cooldown**: Seconds to wait between two teleports to the same warp
 * **Cost**: Economic amount deducted on teleport (requires a Vault economy plugin)
 
-## /setwarp — Create or Manage Warps
+## /katap warp — Manage Warps
 
 ```text
-/setwarp
-/setwarp <name>
+/katap warp edit <name>
+/katap warp create <name>
+/katap warp delete <name>
+/katap warp rename <old> <new>
+/katap warp icon <name>
+/katap warp set <name|permission|cooldown|cost|desc> <name> [value]
 ```
 
-Without a name, opens the warp management dialog where administrators can view all warps, edit properties, or create new ones. With a name, creates or updates a warp at the current location.
+All `/katap warp` subcommands require `katpa.warp.admin`. The editor GUI lets you modify description, icon, permission, cooldown, cost, or rename the warp visually. Right-clicking a warp in the list also opens the editor (visible to `katpa.warp.admin` only).
 
-The management dialog allows:
+* `edit` opens the graphical editor
+* `create` creates a warp at the current location
+* `delete` deletes a warp
+* `rename` renames (old → new)
+* `icon` sets the icon from the player's held item (captures material, `custom_model_data`, 1.21.4+ `item_model`)
+* `set permission <name> [value]` clears the permission when value is blank; `set desc <name> <text>` accepts multi-word text; `set cooldown`/`set cost` set numeric values; `set name` is equivalent to `rename`
 
-* Updating the warp location
-* Setting the permission node
-* Setting the cooldown in seconds
-* Setting the teleport cost
-* Deleting the warp
-
-## /delwarp — Delete a Warp
+## /setwarp and /delwarp — Command Shortcuts
 
 ```text
+/setwarp <name>
 /delwarp <name>
 ```
 
-Deletes the specified warp. Without a name, opens the management dialog.
+`/setwarp` creates or updates a warp at the current location; `/delwarp` deletes a warp. These are command shortcuts—use `/katap warp` for full editing (description, icon, fields).
 
 ## Cross-Server Warp Teleportation
 

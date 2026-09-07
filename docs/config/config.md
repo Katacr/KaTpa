@@ -43,6 +43,8 @@ modules:
     default-permission: ""
     default-cooldown: 0
     default-cost: 0
+    name-max-length: 32
+    description-max-length: 100
   home:
     enabled: true
     warmup: true
@@ -50,6 +52,19 @@ modules:
     sounds: true
     particles: true
     default-amount: 1
+    name-max-length: 32
+    description-max-length: 100
+  pwarp:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    default-amount: 1
+    default-cost: 0
+    default-cooldown: 0
+    name-max-length: 32
+    description-max-length: 100
 ```
 
 | 节点 | 默认值 | 用途 |
@@ -68,8 +83,18 @@ modules:
 | `modules.warp.default-permission` | `""` | 新建地标的默认权限节点，留空表示无限制 |
 | `modules.warp.default-cooldown` | `0` | 新建地标的默认冷却秒数 |
 | `modules.warp.default-cost` | `0` | 新建地标的默认传送费用 |
+| `modules.warp.name-max-length` | `32` | 地标名称最大长度（重命名/创建时校验） |
+| `modules.warp.description-max-length` | `100` | 地标描述最大长度（设置描述时校验） |
+| `modules.pwarp.enabled` | `true` | 玩家地标传送（/pwarp、/katap pwarp） |
+| `modules.pwarp.default-amount` | `1` | 无 `katpa.pwarp.amount.<n>` 权限时的默认创建数量上限 |
+| `modules.pwarp.default-cost` | `0` | 新建玩家地标的默认传送费用 |
+| `modules.pwarp.default-cooldown` | `0` | 新建玩家地标的默认冷却秒数 |
+| `modules.pwarp.name-max-length` | `32` | 玩家地标名称最大长度（重命名/创建时校验） |
+| `modules.pwarp.description-max-length` | `100` | 玩家地标描述最大长度（设置描述时校验） |
 | `modules.home.enabled` | `true` | 个人家传送（/home、/sethome、/delhome） |
 | `modules.home.default-amount` | `1` | 无 `katpa.home.amount.<n>` 权限时的默认家数量上限 |
+| `modules.home.name-max-length` | `32` | 家名称最大长度（重命名/创建时校验） |
+| `modules.home.description-max-length` | `100` | 家描述最大长度（设置描述时校验） |
 
 模块开关修改后需要重启服务器才能生效。
 

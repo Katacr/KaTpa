@@ -10,12 +10,18 @@
 | `katpa.dback` | 所有玩家 | 使用 `/dback` 返回死亡位置 |
 | `katpa.dback.amount.<n>` | — | 允许保存 n 个死亡位置；默认 1，取玩家持有的最大值 |
 | `katpa.warp` | 所有玩家 | 使用 `/warp` 传送到地标 |
-| `katpa.warp.admin` | OP | 使用 `/setwarp` 和 `/delwarp` 管理地标 |
+| `katpa.warp.admin` | OP | 使用 `/setwarp`、`/delwarp` 和 `/katap warp ...` 管理地标（编辑、创建、删除、重命名、图标、设置字段） |
 | `katpa.home` | 所有玩家 | 使用 `/home`、`/sethome` 和 `/delhome` 管理个人家 |
 | `katpa.home.amount.<n>` | — | 允许设置 n 个家；默认 1，取玩家持有的最大值 |
+| `katpa.pwarp.use` | 所有玩家 | 使用 `/pwarp` 传送到玩家地标 |
+| `katpa.pwarp.create` | 所有玩家 | 创建玩家地标 |
+| `katpa.pwarp.admin` | OP | 编辑或删除任意玩家地标（用于清理违规地标） |
+| `katpa.pwarp.amount.<n>` | — | 允许创建 n 个玩家地标；默认 1，取玩家持有的最大值 |
 
 `katpa.dback.amount.*` 是动态权限，不写在 `plugin.yml` 中。在权限插件中授予例如 `katpa.dback.amount.3` 即可让玩家保存 3 个死亡位置。玩家同时持有多个该权限时取最大值。
 
 `katpa.home.amount.*` 同理，授予例如 `katpa.home.amount.5` 即可让玩家设置 5 个家。
+
+`katpa.pwarp.amount.*` 同理，授予例如 `katpa.pwarp.amount.3` 即可让玩家创建 3 个玩家地标。
 
 如果使用权限插件，可以根据服务器需要移除默认权限或只授予特定玩家组。

@@ -21,10 +21,10 @@ public final class InteractionService {
     private final KaTpaPlugin plugin;
     private final InteractionPlatform platform;
 
-    /** 探测并初始化当前服务器可用的 Dialog 适配器。 */
+    /** 初始化基于原生容器库存的交互实现。 */
     public InteractionService(KaTpaPlugin plugin) {
         this.plugin = plugin;
-        this.platform = createPlatform(plugin);
+        this.platform = new org.katacr.katpa.ui.inventory.InventoryInteractionPlatform(plugin);
         this.platform.initialize(plugin);
     }
 
@@ -94,6 +94,26 @@ public final class InteractionService {
         platform.showWarpEditor(player, warp);
     }
 
+    /** 显示玩家地标选择列表。 */
+    public void showPwarpSelector(Player player) {
+        platform.showPwarpSelector(player);
+    }
+
+    /** 显示玩家自己的地标管理列表。 */
+    public void showPwarpManager(Player player) {
+        platform.showPwarpManager(player);
+    }
+
+    /** 显示单个玩家地标编辑界面。 */
+    public void showPwarpEditor(Player player, org.katacr.katpa.model.PlayerWarp warp) {
+        platform.showPwarpEditor(player, warp);
+    }
+
+    /** 显示玩家地标评分界面。 */
+    public void showPwarpRate(Player player, org.katacr.katpa.model.PlayerWarp warp) {
+        platform.showPwarpRate(player, warp);
+    }
+
     /** 显示玩家个人家选择 Dialog。 */
     public void showHomeSelector(Player player) {
         platform.showHomeSelector(player);
@@ -107,43 +127,5 @@ public final class InteractionService {
     /** 在插件关闭时释放平台适配器状态。 */
     public void shutdown() {
         platform.shutdown();
-    }
-
-    /** 按运行时可用的 Dialog API 反射加载对应平台适配器。 */
-    private InteractionPlatform createPlatform(KaTpaPlugin plugin) {
-        ClassLoader classLoader = plugin.getClass().getClassLoader();
-        String adapterClassName;
-        if (classAvailable("io.papermc.paper.dialog.Dialog", classLoader)) {
-            adapterClassName = "org.katacr.katpa.ui.paper.PaperInteractionPlatform";
-        } else if (classAvailable("net.md_5.bungee.api.dialog.Dialog", classLoader)
-                && classAvailable("org.bukkit.event.player.PlayerCustomClickEvent", classLoader)) {
-            adapterClassName = "org.katacr.katpa.ui.spigot.SpigotInteractionPlatform";
-        } else {
-            throw new IllegalStateException("未找到兼容的 Paper 或 Spigot Dialog API（需要 Paper 或 Spigot 1.21.6+）");
-        }
-        try {
-            Class<?> adapterClass = Class.forName(adapterClassName, true, classLoader);
-            return (InteractionPlatform) adapterClass.getDeclaredConstructor().newInstance();
-        } catch (ReflectiveOperationException error) {
-            throw new IllegalStateException("无法实例化交互平台适配器: " + adapterClassName, error);
-        } catch (LinkageError error) {
-            throw new IllegalStateException("无法链接交互平台适配器: " + adapterClassName, error);
-        }
-    }
-
-    /** 探测目标类是否可在当前核心解析，缺失时不触发类初始化。 */
-    private boolean classAvailable(String name, ClassLoader classLoader) {
-        try {
-            Class.forName(name, false, classLoader);
-            return true;
-        } catch (ClassNotFoundException | LinkageError ignored) {
-            return false;
-        }
-    }
-
-    /** 供适配器可选实现，用于向门面暴露平台名称。 */
-    public interface PlatformNamed {
-        /** 返回适配器所用平台的展示名称。 */
-        String platformName();
     }
 }

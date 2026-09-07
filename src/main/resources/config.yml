@@ -84,6 +84,10 @@ modules:
     default-cooldown: 0
     # 新建地标的默认传送费用（需要 Vault 经济插件）。
     default-cost: 0
+    # 地标名称最大长度（聊天输入重命名/创建时校验）。
+    name-max-length: 32
+    # 地标描述最大长度（聊天输入设置描述时校验）。
+    description-max-length: 100
   # 个人家传送（/home、/sethome、/delhome）。
   home:
     enabled: true
@@ -93,6 +97,27 @@ modules:
     particles: true
     # 无 katpa.home.amount.<n> 权限时的默认家数量上限。
     default-amount: 1
+    # 家名称最大长度（聊天输入重命名/创建时校验）。
+    name-max-length: 32
+    # 家描述最大长度（聊天输入设置描述时校验）。
+    description-max-length: 100
+  # 玩家创建的公共地标（/pwarp、/katap pwarp）。
+  pwarp:
+    enabled: true
+    warmup: true
+    warmup-seconds: 3
+    sounds: true
+    particles: true
+    # 无 katpa.pwarp.amount.<n> 权限时的默认创建数量上限。
+    default-amount: 1
+    # 新建玩家地标的默认传送费用（需要 Vault 经济插件）。
+    default-cost: 0
+    # 新建玩家地标的默认冷却秒数。
+    default-cooldown: 0
+    # 玩家地标名称最大长度（聊天输入重命名/创建时校验）。
+    name-max-length: 32
+    # 玩家地标描述最大长度（聊天输入设置描述时校验）。
+    description-max-length: 100
 
 # 使用 plugins/KaTpa/lang 下的语言文件名（不含 .yml）。
 language: zh_CN

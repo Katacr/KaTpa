@@ -13,6 +13,7 @@ import org.katacr.katpa.command.KaTpaCommand;
 import org.katacr.katpa.command.ResponseCommand;
 import org.katacr.katpa.command.SettingsCommand;
 import org.katacr.katpa.command.HomeCommand;
+import org.katacr.katpa.command.PlayerWarpCommand;
 import org.katacr.katpa.command.SetHomeCommand;
 import org.katacr.katpa.command.SetWarpCommand;
 import org.katacr.katpa.command.TargetCommand;
@@ -20,17 +21,21 @@ import org.katacr.katpa.command.WarpCommand;
 import org.katacr.katpa.listener.PlayerListener;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.network.CrossServerService;
+import org.katacr.katpa.placeholder.KaTpaPlaceholderExpansion;
 import org.katacr.katpa.service.BackService;
 import org.katacr.katpa.service.DbackService;
 import org.katacr.katpa.service.HomeService;
 import org.katacr.katpa.service.ParticleService;
+import org.katacr.katpa.service.PlayerWarpService;
 import org.katacr.katpa.service.RequestService;
 import org.katacr.katpa.service.SoundService;
 import org.katacr.katpa.service.TeleportService;
 import org.katacr.katpa.service.WarpService;
 import org.katacr.katpa.storage.BackStore;
 import org.katacr.katpa.storage.HomeStore;
+import org.katacr.katpa.storage.PlayerWarpStore;
 import org.katacr.katpa.storage.SettingsStore;
+import org.katacr.katpa.storage.WarpRatingStore;
 import org.katacr.katpa.storage.WarpStore;
 import org.katacr.katpa.ui.InteractionService;
 import org.katacr.katpa.util.ConfigUpdater;
@@ -55,6 +60,9 @@ public final class KaTpaPlugin extends JavaPlugin {
     private WarpService warp;
     private HomeStore homeStore;
     private HomeService home;
+    private PlayerWarpStore playerWarpStore;
+    private WarpRatingStore warpRatingStore;
+    private PlayerWarpService playerWarp;
     private Economy economy;
 
     /** 在插件启用前通过 Libby 下载并挂载 SQLite JDBC 运行时依赖。 */
@@ -154,8 +162,24 @@ public final class KaTpaPlugin extends JavaPlugin {
             }
             home = new HomeService(this);
         }
+        if (moduleEnabled("pwarp")) {
+            playerWarpStore = new PlayerWarpStore(this);
+            try {
+                playerWarpStore.initialize(settings.connection(), settings.isMysql());
+            } catch (Exception e) {
+                getLogger().severe("KaTpa 玩家地标数据库初始化失败: " + e.getMessage());
+            }
+            warpRatingStore = new WarpRatingStore(this);
+            try {
+                warpRatingStore.initialize(settings.connection(), settings.isMysql());
+            } catch (Exception e) {
+                getLogger().severe("KaTpa 玩家地标评分数据库初始化失败: " + e.getMessage());
+            }
+            playerWarp = new PlayerWarpService(this);
+        }
         setupEconomy();
         registerCommands();
+        registerPlaceholders();
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getOnlinePlayers().forEach(settings::rememberPlayer);
         var enabledModules = java.util.stream.Stream.of("tpa", "back", "dback", "warp", "home")
@@ -189,6 +213,12 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
         if (homeStore != null) {
             homeStore.close();
+        }
+        if (playerWarpStore != null) {
+            playerWarpStore.close();
+        }
+        if (warpRatingStore != null) {
+            warpRatingStore.close();
         }
         if (settings != null) {
             settings.close();
@@ -270,6 +300,21 @@ public final class KaTpaPlugin extends JavaPlugin {
         return home;
     }
 
+    /** 返回玩家地标持久化存储。 */
+    public PlayerWarpStore playerWarpStore() {
+        return playerWarpStore;
+    }
+
+    /** 返回玩家地标评分持久化存储。 */
+    public WarpRatingStore warpRatingStore() {
+        return warpRatingStore;
+    }
+
+    /** 返回玩家地标服务。 */
+    public PlayerWarpService playerWarp() {
+        return playerWarp;
+    }
+
     /** 返回 Vault 经济接口，未安装时为 null。 */
     public Economy economy() {
         return economy;
@@ -290,6 +335,15 @@ public final class KaTpaPlugin extends JavaPlugin {
             economy = registration.getProvider();
             getLogger().info("已挂载 Vault 经济接口。");
         }
+    }
+
+    /** 当 PlaceholderAPI 存在时注册 KaTpa 占位符扩展。 */
+    private void registerPlaceholders() {
+        if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) {
+            return;
+        }
+        new KaTpaPlaceholderExpansion(this).register();
+        getLogger().info("已注册 PlaceholderAPI 占位符扩展。");
     }
 
     /** 注册主命令和各功能模块指令及其补全器，已关闭模块注册统一提示。 */
@@ -350,6 +404,13 @@ public final class KaTpaPlugin extends JavaPlugin {
             command("delhome").setTabCompleter(delHomeCommand);
         } else {
             disabledCommand("home", "sethome", "delhome");
+        }
+        if (moduleEnabled("pwarp")) {
+            PlayerWarpCommand pwarpCommand = new PlayerWarpCommand(this);
+            command("pwarp").setExecutor(pwarpCommand);
+            command("pwarp").setTabCompleter(pwarpCommand);
+        } else {
+            disabledCommand("pwarp");
         }
     }
 

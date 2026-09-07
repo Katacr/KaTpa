@@ -1,0 +1,43 @@
+title: '&8KaTpa &f选择玩家'
+
+Layout:
+  - '#########'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#<####>#'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "1":
+    type: 'ONLINE_PLAYERS'
+    display:
+      material: PLAYER_HEAD
+      skull_owner: '{player_name}'
+      empty_text: '当前没有在线玩家'
+      name: '&a{player_name}'
+      lore:
+        - '&7点击向该玩家发送传送请求'
+        - '&e点击请求'
+    actions:
+      left:
+        - 'katpa: request send {player_name}'
+        - 'close'
+  "<":
+    display:
+      material: ARROW
+      name: '&a上一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page prev'
+  ">":
+    display:
+      material: ARROW
+      name: '&a下一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page next'

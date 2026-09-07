@@ -82,9 +82,9 @@ public final class BackService {
             return;
         }
         markOwnTeleport(player.getUniqueId());
-        player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             pendingBack.remove(player.getUniqueId());
-            if (error != null || !Boolean.TRUE.equals(success)) {
+            if (!player.teleport(target)) {
                 plugin.messages().send(player, "teleport-failed");
                 plugin.network().backArrivalFailed(player, "teleport-failed");
                 return;
@@ -93,7 +93,7 @@ public final class BackService {
             plugin.messages().sendActionBar(player,
                     plugin.messages().component("back-success", java.util.Map.of(), false));
             plugin.network().backArrivalComplete(player);
-        }));
+        });
     }
 
     /** 玩家进入子服时检查是否有待执行的跨服返回。 */
@@ -114,31 +114,33 @@ public final class BackService {
         recordLocation(player);
         plugin.teleports().beginDirect(player, "back", () -> {
             markOwnTeleport(player.getUniqueId());
-            player.teleportAsync(target).whenComplete((success, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-                if (error != null || !Boolean.TRUE.equals(success)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.teleport(target)) {
                     plugin.messages().send(player, "teleport-failed");
                     return;
                 }
                 plugin.sounds().playAt(target, "teleport", "back");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("back-success", java.util.Map.of(), false));
-            }));
+            });
         });
     }
 
-    /** 跨服返回：先记录当前位置，请求代理切服并在目标服落点。 */
+    /** 跨服返回：先记录当前位置，完成源服吟唱后请求代理切服并在目标服落点。 */
     private void teleportCrossServer(Player player, LocationRecord record) {
         recordLocation(player);
         pendingBack.put(player.getUniqueId(), true);
-        if (!plugin.network().backRequest(player, record.server(), record, success -> {
-            if (!Boolean.TRUE.equals(success)) {
+        plugin.teleports().beginDirect(player, "back", () -> {
+            if (!plugin.network().backRequest(player, record.server(), record, success -> {
+                if (!Boolean.TRUE.equals(success)) {
+                    pendingBack.remove(player.getUniqueId());
+                    plugin.messages().send(player, "back-failed",
+                            java.util.Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+                }
+            })) {
                 pendingBack.remove(player.getUniqueId());
-                plugin.messages().send(player, "back-failed",
-                        java.util.Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+                plugin.messages().send(player, "proxy-unavailable");
             }
-        })) {
-            pendingBack.remove(player.getUniqueId());
-            plugin.messages().send(player, "proxy-unavailable");
-        }
+        });
     }
 }

@@ -1,0 +1,60 @@
+title: '&8KaTpa &f{list_type_display}'
+
+Layout:
+  - '########A'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#<####>X'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "1":
+    type: 'RELATION_LIST'
+    display:
+      material: PLAYER_HEAD
+      skull_owner: '{member_name}'
+      empty_text: '名单暂无成员'
+      name: '&a{member_name}'
+      lore:
+        - '&7点击从名单中移除'
+        - '&c[左键] 移除'
+    actions:
+      left:
+        - 'katpa: relation remove {list_type} {member_name}'
+        - 'close'
+  "A":
+    display:
+      material: PLAYER_HEAD
+      name: '&a添加成员'
+      lore:
+        - '&7点击后输入要添加进{list_type_display}的玩家名'
+        - '&e点击添加'
+    actions:
+      left:
+        - 'katpa: relation add {list_type}'
+  "X":
+    display:
+      material: BARRIER
+      name: '&c关闭'
+    actions:
+      left:
+        - 'close'
+  "<":
+    display:
+      material: ARROW
+      name: '&a上一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page prev'
+  ">":
+    display:
+      material: ARROW
+      name: '&a下一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page next'
