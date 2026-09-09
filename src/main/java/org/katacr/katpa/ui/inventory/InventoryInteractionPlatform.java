@@ -51,6 +51,7 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
         gui.registerActionHandler("setting", actions);
         gui.registerActionHandler("relation", actions);
         gui.registerActionHandler("warp", actions);
+        gui.registerActionHandler("pwarp", actions);
         gui.registerActionHandler("home", actions);
         gui.registerActionHandler("request", actions);
         gui.registerActionHandler("page", actions);

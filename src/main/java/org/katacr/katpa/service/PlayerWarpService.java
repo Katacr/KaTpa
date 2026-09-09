@@ -207,6 +207,26 @@ public final class PlayerWarpService {
         plugin.messages().send(player, "pwarp-rated", Map.of("name", name, "stars", Integer.toString(stars)));
     }
 
+    /** 切换玩家对某玩家地标的收藏状态，并提示结果。 */
+    public void toggleFavorite(Player player, String name) {
+        PlayerWarp warp = plugin.playerWarpStore().find(name);
+        if (warp == null) {
+            plugin.messages().send(player, "pwarp-not-found", Map.of("name", name));
+            return;
+        }
+        boolean favorited = plugin.pwarpMeta().toggleFavorite(player.getUniqueId(), warp.id());
+        if (favorited) {
+            plugin.messages().send(player, "pwarp-favorited", Map.of("name", name));
+        } else {
+            plugin.messages().send(player, "pwarp-unfavorited", Map.of("name", name));
+        }
+    }
+
+    /** 判断玩家是否已收藏某地标。 */
+    public boolean isFavorite(Player player, UUID warpId) {
+        return plugin.pwarpMeta().isFavorite(player.getUniqueId(), warpId);
+    }
+
     /** 领取玩家离线期间累计的传送收入；在线直接 deposit，离线已挂账由 join 事件领取。 */
     public void claimPendingIncome(Player player) {
         double amount = plugin.warpRatingStore().takePendingIncome(player.getUniqueId());
@@ -217,8 +237,7 @@ public final class PlayerWarpService {
     }
 
     /** 玩家可创建的玩家地标数量上限，默认 1，取权限持有最大值。 */
-    public int maxWarps(Player player) {
-        int max = plugin.getConfig().getInt("modules.pwarp.default-amount", 1);
+    public int maxWarps(Player player) {        int max = plugin.getConfig().getInt("modules.pwarp.default-amount", 1);
         for (var perm : player.getEffectivePermissions()) {
             String prefix = "katpa.pwarp.amount.";
             if (perm.getValue() && perm.getPermission().startsWith(prefix)) {
@@ -258,6 +277,7 @@ public final class PlayerWarpService {
                 plugin.sounds().playAt(target, "teleport", "pwarp");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("pwarp-success", Map.of("name", warp.name()), false));
+                plugin.pwarpMeta().recordVisit(player.getUniqueId(), warp.id());
                 if (!isOwner && cost > 0) {
                     settleIncome(warp, cost);
                 }
@@ -273,8 +293,11 @@ public final class PlayerWarpService {
                 warp.server(), warp.world(), warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch(), System.currentTimeMillis());
         if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
-            if (Boolean.TRUE.equals(success) && !isOwner && cost > 0) {
-                settleIncome(warp, cost);
+            if (Boolean.TRUE.equals(success)) {
+                plugin.pwarpMeta().recordVisit(player.getUniqueId(), warp.id());
+                if (!isOwner && cost > 0) {
+                    settleIncome(warp, cost);
+                }
             } else if (!Boolean.TRUE.equals(success)) {
                 plugin.messages().send(player, "pwarp-failed",
                         Map.of("reason", plugin.messages().text("network-reason.connect-failed")));

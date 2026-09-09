@@ -68,3 +68,5 @@
 **实现类**（`src/main/java/.../ui/inventory/gui/`）：`GuiManager`（加载/渲染/动作）、`GuiMenu`（解析）、`GuiMenuHolder`、`MenuSession`、`GuiActionHandler`、`GuiListProvider`/`GuiListItem`、`KaTpaGuiActions`、`KaTpaGuiListProvider`。`InventoryMenuListener` 同时识别 `GuiMenuHolder` 与编程式 `InventoryMenu`。
 
 **待办**：翻页（多页 layout）、请求接受/拒绝动作、聊天输入框（添加成员/新建地标/编辑字段）、`update` 定时刷新。详见 `INDEX.md` 的"GUI 资源驱动架构"节。
+
+**修复记录（2026-09-10）：** Hopper 漏斗窗口拒绝/接受按钮无响应。根因：`RequestHopperMenu.respond()` 使用 `p.performCommand("tpdeny " + requestId)` + `close()`，在库存关闭期间 `performCommand` 行为不可靠，命令可能未执行或执行不完整。修复：移除 `respond()` 方法，新增 `accept()`/`deny()` 两个私有方法，直接调用 `((KaTpaPlugin) plugin).requests().accept(p, request.id())` 和 `.deny(p, request.id())`，跳过命令解析层。同时移除未使用的 `UUID` 导入和 `render()` 中的 `requestId` 局部变量。

@@ -33,7 +33,16 @@ public final class InventoryMenuListener implements Listener {
         if (holder instanceof GuiMenuHolder) {
             event.setCancelled(true);
             if (event.getWhoClicked() instanceof Player player && event.getRawSlot() >= 0) {
-                String clickType = event.isRightClick() ? "right" : "left";
+                org.bukkit.event.inventory.ClickType click = event.getClick();
+                String clickType;
+                if (click == org.bukkit.event.inventory.ClickType.DROP
+                        || click == org.bukkit.event.inventory.ClickType.CONTROL_DROP) {
+                    clickType = "drop";
+                } else if (event.isRightClick()) {
+                    clickType = "right";
+                } else {
+                    clickType = "left";
+                }
                 gui.handleClick(player, event.getRawSlot(), clickType);
             }
             return;

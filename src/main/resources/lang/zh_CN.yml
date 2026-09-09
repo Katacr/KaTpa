@@ -125,6 +125,8 @@ pwarp-seticon-usage: "&c用法: /katap pwarp icon <名称>"
 pwarp-rate-usage: "&c用法: /katap pwarp rate <名称> <1-5>"
 pwarp-set-usage: "&c用法: /katap pwarp set <name|cost|cooldown|desc> <名称> [值]"
 pwarp-admin-usage: "&c用法: /katap pwarp <edit|create|delete|rename|icon|set|rate> ..."
+pwarp-favorited: "&a已收藏玩家地标 &f{name}&a。"
+pwarp-unfavorited: "&a已取消收藏玩家地标 &f{name}&a。"
 
 help:
   header: "&b&lKaTpa 指令帮助"

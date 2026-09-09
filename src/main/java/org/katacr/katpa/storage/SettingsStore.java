@@ -226,6 +226,12 @@ public final class SettingsStore {
         return new KnownPlayer(player.getUniqueId(), player.getName());
     }
 
+    /** 返回玩家最近使用的名称；未知时返回 null。 */
+    public String knownName(UUID playerId) {
+        KnownPlayer player = knownPlayers.get(playerId);
+        return player != null ? player.name() : null;
+    }
+
     /** 返回当前数据库连接，供共享存储使用。 */
     public Connection connection() {
         return connection;

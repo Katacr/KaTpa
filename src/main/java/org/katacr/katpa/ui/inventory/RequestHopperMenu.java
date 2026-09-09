@@ -8,11 +8,11 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.katacr.katpa.KaTpaPlugin;
 import org.katacr.katpa.model.RequestType;
 import org.katacr.katpa.model.TeleportRequest;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 单条传送请求的漏斗窗口（5 格横向一排）。
@@ -47,7 +47,6 @@ public final class RequestHopperMenu extends InventoryMenu {
 
     @Override
     protected void render() {
-        UUID requestId = request.id();
         ItemStack accept = simple(Material.GREEN_STAINED_GLASS_PANE, "&a&l接受",
                 List.of("&7点击接受 &f" + senderName, "&7的传送请求"));
         ItemStack reject = simple(Material.RED_STAINED_GLASS_PANE, "&c&l拒绝",
@@ -57,18 +56,26 @@ public final class RequestHopperMenu extends InventoryMenu {
         // 漏斗外形：槽位 2,3 绿(接受) | 4 头颅 | 5,6 红(拒绝)，其余为边框
         button(0, frame, null);
         button(1, frame, null);
-        button(2, accept, p -> respond(p, "tpaccept " + requestId));
-        button(3, accept, p -> respond(p, "tpaccept " + requestId));
+        button(2, accept, p -> accept(p));
+        button(3, accept, p -> accept(p));
         button(4, skull(senderName), null);
-        button(5, reject, p -> respond(p, "tpdeny " + requestId));
-        button(6, reject, p -> respond(p, "tpdeny " + requestId));
+        button(5, reject, p -> deny(p));
+        button(6, reject, p -> deny(p));
         button(7, frame, null);
         button(8, frame, null);
     }
 
-    /** 执行命令并关闭窗口。 */
-    private void respond(Player p, String command) {
-        p.performCommand(command);
+    /** 直接调用服务层接受请求并关闭窗口。 */
+    private void accept(Player p) {
+        KaTpaPlugin katpa = (KaTpaPlugin) plugin;
+        katpa.requests().accept(p, request.id());
+        close();
+    }
+
+    /** 直接调用服务层拒绝请求并关闭窗口。 */
+    private void deny(Player p) {
+        KaTpaPlugin katpa = (KaTpaPlugin) plugin;
+        katpa.requests().deny(p, request.id());
         close();
     }
 

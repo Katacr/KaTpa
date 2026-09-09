@@ -1,7 +1,7 @@
 # KaTpa 交接文件索引
 
 > 项目：KaTpa —— 面向 Paper 1.21.7 / Spigot 1.21.6+、JDK 21 的玩家传送插件
-> 最后更新：2026-09-07（warp/home 图标与描述扩展，item_model 反射方案，/katpa warp 管理指令，中英文文档同步）
+> 最后更新：2026-09-10（warp/home 图标与描述扩展，item_model 反射方案，/katpa warp 管理指令重构，玩家公共地标模块，历史传送/玩家筛选/收藏增强，Q 键收藏交互，MySQL TEXT DEFAULT 修复，Hopper 拒绝按钮修复）
 
 ## 项目概览
 
@@ -136,6 +136,11 @@
   - **配置**：`config.md`（中/英）YAML 示例与节点表新增 `modules.warp.name-max-length`/`description-max-length`、`modules.home.name-max-length`/`description-max-length`（默认 32/100）。
 - 注：`docs/usage/settings.md` 与 `docs-en/usage/settings.md` 仍引用"对话框"等旧 UI 术语（Inventory 迁移前遗留），待 UI 文档整体修订时统一。
 
+## 文档同步状态（2026-09-09）
+
+- `docs/usage/pwarp.md`（中/英）：新增「历史传送 / 按玩家筛选 / 收藏」三节，主列表列表操作更新（右键=收藏切换，评分改由排行榜入口），并说明三者交互与入口按钮 H/P/F。
+- `docs/perm/commands.md` 与 `docs/perm/permissions.md`：本次未新增指令/权限（收藏/历史/筛选均为 GUI 动作），无需改表；保持 `rate` 指令说明不变。
+
 ## 玩家公共地标模块（player_warp，2026-09-07 新增）
 
 > 独立于现有 warp 模块。玩家可创建属于自己的公共地标，他人可浏览/传送/评分，创建者获得传送收入（离线挂账）。
@@ -157,6 +162,26 @@
 **离线收入事务：** 他人传送付费时，若创建者在线直接 `depositPlayer`；离线（含跨服不在任意子服）则 `addPendingIncome` 累加挂账，创建者下次 `PlayerJoinEvent`（任意子服）`claimPendingIncome` 领取并提示。
 
 **文档：** `docs/usage/pwarp.md`（中/英）、`docs/perm/commands.md`（玩家地标指令段）、`docs/perm/permissions.md`（pwarp 权限）、`docs/config/config.md`（modules.pwarp 表格+示例）、`docs/SUMMARY.md`（usage 登记）。
+
+**增强（2026-09-09）：历史传送 / 玩家筛选 / 收藏**
+- **历史传送**：成功传送（本地+跨服落点成功）后 `recordVisit` 写入 `player_warp_history`（PK player_uuid+warp_id，去重保留最近访问时间）；菜单 `pwarp_history` 按访问倒序列出，可再次传送。
+- **玩家筛选**：菜单 `pwarp_players` 列出所有拥有地标的创建者（`PwarpMetaStore.ownerIds` 从 `player_warp` 取 DISTINCT owner_id，名称走 `SettingsStore.knownName`），点击进入 `pwarp_owner_list:{owner_uuid}`（PWARP_OWNER_LIST，按名称排序）。
+- **收藏**：新增 `player_warp_favorite` 表；`pwarp` 列表项（含主列表/历史/玩家筛选）按 **Q 键（丢弃键）**切换收藏（左键传送）；`pwarp_favorites` 菜单按 Q 键取消收藏。动作 `katpa: pwarp favorite <name>` → `PlayerWarpService.toggleFavorite`（切换后 `gui.reopen` 刷新图标/收藏态）。
+- **新增文件/扩展**：
+  - `storage/PwarpMetaStore.java`：两张新表 + `recordVisit`/`history`/`toggleFavorite`/`isFavorite`/`favorites`/`ownerIds`/`byOwner`；`KaTpaPlugin` 新增字段与访问器 `pwarpMeta()`、`onEnable` 初始化、`onDisable` 关闭。
+  - `KaTpaGuiListProvider`：`PWARP_HISTORY`/`PWARP_FAVORITE`/`PWARP_OWNERS`/`PWARP_OWNER_LIST` 四种列表类型 + 共享 `buildPwarpItem`（收藏态 lore/actions）；`buildPlayerWarps`（主列表）右键改为收藏切换。
+  - `KaTpaGuiActions.handlePlayerWarp`：新增 `favorite` 子动作。
+  - `InventoryMenuListener`：识别 `ClickType.DROP`/`CONTROL_DROP` → clickType `"drop"`，YAML 收藏动作从 `right` 改为 `drop`；`GuiMenu.actionsFor` 已支持任意 clickType 键。
+  - YAML：`pwarp_selector`（加 H/P/F 三入口）、`pwarp_history`/`pwarp_favorites`/`pwarp_players`/`pwarp_owner_list` 四个新菜单；`gui/` 资源每次启动 `saveResource(..., true)` 强制覆盖。
+  - `lang/zh_CN.yml`：`pwarp-favorited`/`pwarp-unfavorited`。
+- **交互取舍**：主列表/PWARP_LIST 右键由"评分"改为收藏切换，评分入口迁至排行榜 `pwarp_leaderboard`（右键地标进评分菜单）；收藏触发键最终定为 **Q 键**（`drop`，避免右键占用评分入口），lore 显示 `[Q键]`。
+- 待部署重启验证：新建 `player_warp_history`/`player_warp_favorite` 两表；历史/收藏/玩家筛选菜单跳转与 Q 键收藏切换。
+
+**修复记录（2026-09-08）：** 初版部署后玩家地标功能完全无效，日志报 `未注册的 katpa 动作命名空间: pwarp`。根因：`InventoryInteractionPlatform.initialize` 注册 GUI 动作命名空间时只注册了 setting/relation/warp/home/request/page 六个，**漏注册 `pwarp`**，导致所有 `katpa: pwarp ...` 菜单动作无法分发。修复：在 `warp` 注册后补 `gui.registerActionHandler("pwarp", actions)`（`InventoryInteractionPlatform.java:54`）。教训：新增 GUI 动作命名空间时，`KaTpaGuiActions.execute` 的 `switch` 分支与 `registerActionHandler` 注册必须同步。
+
+**修复记录（2026-09-09）：** 运行时报 `Table 'katpa.home' doesn't exist`（`/sethome` 写入失败）。根因：MySQL/MariaDB 严格模式下建表语句中 `TEXT NOT NULL DEFAULT ''` 列定义不合法（TEXT 类型不允许 DEFAULT），导致 `CREATE TABLE IF NOT EXISTS` 在启动时抛 `SQLException`（仅 severe 一行日志，插件继续运行），表从未建成。修复：`HomeStore`/`WarpStore`/`PlayerWarpStore` 的 **MySQL 分支**建表语句去掉 TEXT 列的 `DEFAULT ''`（改为 `TEXT NOT NULL`，代码层已有 null→"" 兜底）；SQLite 分支保留 DEFAULT（SQLite 支持无碍）。已重新 `shadowJar` 构建成功，待部署重启验证：`/sethome` 后确认 `home` 表生成。若重启后仍报表不存在，需检查启动日志中 `KaTpa 家位置数据库初始化失败` 一行的具体原因（重点排查 MySQL 用户是否缺 `CREATE` 权限，可手动 `GRANT ALL ON katpa.* TO 'katpa'@'%';` 或以管理员手动执行建表 SQL）。
+
+**修复记录（2026-09-10）：** Hopper 漏斗窗口拒绝/接受按钮无响应（`/tpdeny` 命令正常）。根因：`RequestHopperMenu.respond()` 用 `p.performCommand("tpdeny " + requestId)` + `close()`，在库存关闭期间 `performCommand` 行为不可靠，命令可能未执行。修复：移除通用 `respond()` 方法，新增 `accept()`/`deny()` 私有方法，直接调用 `((KaTpaPlugin) plugin).requests().accept(p, request.id())` / `.deny(p, request.id())`，绕过命令解析层。改动文件：`RequestHopperMenu.java`（+`KaTpaPlugin` 导入，-`UUID` 导入，-`requestId` 局部变量，新增两个方法）。已 `shadowJar` 构建通过。
 
 ## 关键约定
 

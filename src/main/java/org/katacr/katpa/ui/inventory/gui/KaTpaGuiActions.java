@@ -213,6 +213,9 @@ public final class KaTpaGuiActions implements GuiActionHandler {
                 return;
             }
             plugin.interactions().showPwarpRate(player, warp);
+        } else if (args.length >= 2 && "favorite".equalsIgnoreCase(args[0])) {
+            plugin.playerWarp().toggleFavorite(player, args[1]);
+            gui.reopen(player);
         } else if (args.length >= 4 && "do".equalsIgnoreCase(args[0]) && "rate".equalsIgnoreCase(args[1])) {
             try {
                 int stars = Integer.parseInt(args[3]);

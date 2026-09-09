@@ -16,9 +16,29 @@ Without a name, opens the player warp selection list showing all player warps on
 Interactions in the list:
 
 * **Left click** teleports (free for the creator; others pay the warp's `cost`)
-* **Right click** opens the rating menu (1-5 stars)
+* **Q key** (drop key) favorites / unfavorites the warp (state refreshes immediately on the icon and tooltip)
 * Button **B** (My Warps) opens the list of warps you created
+* Button **H** (History) opens the list of player warps you have teleported to
+* Button **P** (By Player) filters player warps by creator
+* Button **F** (Favorites) opens the list of your favorited player warps
 * Button **L** (Leaderboard) opens the top-10 player warps by score
+
+> Rating entry: right-click in the main list now toggles favorite. To rate, open the **Leaderboard L** then right-click a warp to enter the rating menu (`/katap pwarp rate <name> <1-5>` always works).
+
+## Teleport History
+
+Click **H** in the player warp list to see the player warps you have **successfully teleported to** before (ordered by most recent visit, deduplicated). Click an entry to teleport again, right-click to favorite/unfavorite.
+
+## Filter by Player
+
+Click **P** in the player warp list to see all creators who own at least one player warp (sorted by name). Click a creator to view all of their warps in a filtered list, where you can teleport and favorite.
+
+## Favorites
+
+Players can manually favorite player warps:
+
+* In the main list, history list, or by-player list, press the **Q key** (drop key) to favorite/unfavorite a warp.
+* Open "My Favorites" (**F**) to list all favorited warps; press Q to unfavorite, left-click to teleport.
 
 ## Creating Your Own Warp
 

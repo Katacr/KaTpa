@@ -6,7 +6,7 @@ Layout:
   - '#1111111#'
   - '#1111111#'
   - '#1111111#'
-  - '#B####L#'
+  - '#BH#P#F#L'
 
 button:
   "#":
@@ -28,13 +28,13 @@ button:
         - '&7评分: &f{pwarp_stars}★ &7({pwarp_score}分)'
         - ''
         - '&a[左键] 传送'
-        - '&e[右键] 评分'
+        - '&e[Q键] 收藏/取消'
     actions:
       left:
         - 'command: pwarp {pwarp_name}'
         - 'close'
-      right:
-        - 'katpa: pwarp rate {pwarp_name}'
+      drop:
+        - 'katpa: pwarp favorite {pwarp_name}'
   "B":
     display:
       material: ANVIL
@@ -45,6 +45,37 @@ button:
     actions:
       left:
         - 'open: pwarp_manager'
+  "H":
+    display:
+      material: CLOCK
+      name: '&a历史传送'
+      lore:
+        - '&7查看你曾经传送过的玩家地标'
+        - '&e点击查看'
+    actions:
+      left:
+        - 'open: pwarp_history'
+  "P":
+    display:
+      material: PLAYER_HEAD
+      skull_owner: '{player_name}'
+      name: '&a玩家筛选'
+      lore:
+        - '&7按创建者筛选玩家地标'
+        - '&e点击筛选'
+    actions:
+      left:
+        - 'open: pwarp_players'
+  "F":
+    display:
+      material: NETHER_STAR
+      name: '&a我的收藏'
+      lore:
+        - '&7查看你收藏的玩家地标'
+        - '&e点击查看'
+    actions:
+      left:
+        - 'open: pwarp_favorites'
   "L":
     display:
       material: NETHER_STAR

@@ -58,7 +58,7 @@ public final class PlayerWarpStore {
                             z DOUBLE NOT NULL,
                             yaw FLOAT NOT NULL,
                             pitch FLOAT NOT NULL,
-                            description TEXT NOT NULL DEFAULT '',
+                            description TEXT NOT NULL,
                             icon_material VARCHAR(64) NOT NULL DEFAULT '',
                             icon_custom_data INT,
                             icon_item_model VARCHAR(255) NOT NULL DEFAULT '',

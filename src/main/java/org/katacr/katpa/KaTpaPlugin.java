@@ -34,6 +34,7 @@ import org.katacr.katpa.service.WarpService;
 import org.katacr.katpa.storage.BackStore;
 import org.katacr.katpa.storage.HomeStore;
 import org.katacr.katpa.storage.PlayerWarpStore;
+import org.katacr.katpa.storage.PwarpMetaStore;
 import org.katacr.katpa.storage.SettingsStore;
 import org.katacr.katpa.storage.WarpRatingStore;
 import org.katacr.katpa.storage.WarpStore;
@@ -62,6 +63,7 @@ public final class KaTpaPlugin extends JavaPlugin {
     private HomeService home;
     private PlayerWarpStore playerWarpStore;
     private WarpRatingStore warpRatingStore;
+    private PwarpMetaStore pwarpMetaStore;
     private PlayerWarpService playerWarp;
     private Economy economy;
 
@@ -175,6 +177,12 @@ public final class KaTpaPlugin extends JavaPlugin {
             } catch (Exception e) {
                 getLogger().severe("KaTpa 玩家地标评分数据库初始化失败: " + e.getMessage());
             }
+            pwarpMetaStore = new PwarpMetaStore(this);
+            try {
+                pwarpMetaStore.initialize(settings.connection(), settings.isMysql());
+            } catch (Exception e) {
+                getLogger().severe("KaTpa 玩家地标元数据初始化失败: " + e.getMessage());
+            }
             playerWarp = new PlayerWarpService(this);
         }
         setupEconomy();
@@ -219,6 +227,9 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
         if (warpRatingStore != null) {
             warpRatingStore.close();
+        }
+        if (pwarpMetaStore != null) {
+            pwarpMetaStore.close();
         }
         if (settings != null) {
             settings.close();
@@ -313,6 +324,11 @@ public final class KaTpaPlugin extends JavaPlugin {
     /** 返回玩家地标服务。 */
     public PlayerWarpService playerWarp() {
         return playerWarp;
+    }
+
+    /** 返回玩家地标历史与收藏持久化存储。 */
+    public PwarpMetaStore pwarpMeta() {
+        return pwarpMetaStore;
     }
 
     /** 返回 Vault 经济接口，未安装时为 null。 */

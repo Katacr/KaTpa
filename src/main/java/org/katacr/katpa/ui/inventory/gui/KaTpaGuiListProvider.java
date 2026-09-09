@@ -16,8 +16,11 @@ import org.katacr.katpa.model.Warp;
 import org.katacr.katpa.service.RequestService;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -54,6 +57,18 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             }
             case "PWARP_LEADERBOARD" -> {
                 return buildPwarpLeaderboard(player.getBukkit(), session, page, perPage);
+            }
+            case "PWARP_HISTORY" -> {
+                return buildPwarpHistory(player.getBukkit(), session, page, perPage);
+            }
+            case "PWARP_FAVORITE" -> {
+                return buildPwarpFavorite(player.getBukkit(), session, page, perPage);
+            }
+            case "PWARP_OWNERS" -> {
+                return buildPwarpOwners(player.getBukkit(), session, page, perPage);
+            }
+            case "PWARP_OWNER_LIST" -> {
+                return buildPwarpOwnerList(player.getBukkit(), session, page, perPage);
             }
             case "HOME_LIST" -> {
                 return buildHomes(player.getBukkit(), page, perPage);
@@ -227,7 +242,9 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
                     lore.add("&e[右键] 编辑");
                 } else {
                     lore.add("&a[左键] 传送");
-                    lore.add("&e[右键] 评分");
+                    boolean fav = plugin.pwarpMeta() != null
+                            && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id());
+                    lore.add(fav ? "&c[Q键] 取消收藏" : "&e[Q键] 收藏");
                 }
                 meta.setLore(lore);
                 item.setItemMeta(meta);
@@ -245,6 +262,8 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             vars.put("pwarp_icon", warp.iconMaterial() == null ? PlayerWarp.DEFAULT_ICON : warp.iconMaterial());
             vars.put("pwarp_custom_data", warp.iconCustomData() == null ? "" : String.valueOf(warp.iconCustomData()));
             vars.put("pwarp_item_model", warp.iconItemModel() == null ? "" : warp.iconItemModel());
+            vars.put("pwarp_favorite", String.valueOf(plugin.pwarpMeta() != null
+                    && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id())));
             items.add(new GuiListItem(item, vars));
         }
         return items;
@@ -295,6 +314,141 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             items.add(new GuiListItem(item, vars));
         }
         return items;
+    }
+
+    /** 构建玩家历史传送过的玩家地标列表（按最近访问倒序）。 */
+    private List<GuiListItem> buildPwarpHistory(Player player, MenuSession session, int page, int perPage) {
+        if (plugin.playerWarpStore() == null || plugin.pwarpMeta() == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<GuiListItem> items = new ArrayList<>();
+        List<UUID> ids = plugin.pwarpMeta().history(player.getUniqueId());
+        for (UUID id : pageOf(ids, page, perPage)) {
+            PlayerWarp warp = plugin.playerWarpStore().find(id);
+            if (warp == null) {
+                continue;
+            }
+            items.add(buildPwarpItem(player, warp, false, true, false));
+        }
+        return items;
+    }
+
+    /** 构建玩家收藏的玩家地标列表。 */
+    private List<GuiListItem> buildPwarpFavorite(Player player, MenuSession session, int page, int perPage) {
+        if (plugin.playerWarpStore() == null || plugin.pwarpMeta() == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<GuiListItem> items = new ArrayList<>();
+        List<UUID> ids = plugin.pwarpMeta().favorites(player.getUniqueId());
+        for (UUID id : pageOf(ids, page, perPage)) {
+            PlayerWarp warp = plugin.playerWarpStore().find(id);
+            if (warp == null) {
+                continue;
+            }
+            items.add(buildPwarpItem(player, warp, false, true, true));
+        }
+        return items;
+    }
+
+    /** 构建拥有至少一个玩家地标的玩家头颅列表（点击进入该玩家地标筛选）。 */
+    private List<GuiListItem> buildPwarpOwners(Player player, MenuSession session, int page, int perPage) {
+        if (plugin.playerWarpStore() == null || plugin.pwarpMeta() == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<GuiListItem> items = new ArrayList<>();
+        Set<UUID> owners = plugin.pwarpMeta().ownerIds();
+        List<String> sorted = new ArrayList<>();
+        Map<String, UUID> nameToId = new HashMap<>();
+        for (UUID id : owners) {
+            String name = plugin.settings().knownName(id);
+            if (name == null || name.isBlank()) {
+                name = id.toString();
+            }
+            sorted.add(name);
+            nameToId.put(name.toLowerCase(Locale.ROOT), id);
+        }
+        sorted.sort(String.CASE_INSENSITIVE_ORDER);
+        for (String name : pageOf(sorted, page, perPage)) {
+            UUID ownerId = nameToId.get(name.toLowerCase(Locale.ROOT));
+            ItemStack item = skull(name, "&a" + name, java.util.List.of(
+                    "&7筛选该玩家创建的玩家地标", "&e点击筛选"));
+            Map<String, String> vars = new java.util.HashMap<>();
+            vars.put("owner_name", name);
+            vars.put("owner_uuid", ownerId != null ? ownerId.toString() : "");
+            items.add(new GuiListItem(item, vars));
+        }
+        return items;
+    }
+
+    /** 构建指定创建者拥有的玩家地标列表（来自 PWARP_OWNERS 的点击参数）。 */
+    private List<GuiListItem> buildPwarpOwnerList(Player player, MenuSession session, int page, int perPage) {
+        if (plugin.playerWarpStore() == null || plugin.pwarpMeta() == null) {
+            return java.util.Collections.emptyList();
+        }
+        String ownerArg = session != null ? session.args() : "";
+        UUID ownerId;
+        try {
+            ownerId = UUID.fromString(ownerArg);
+        } catch (IllegalArgumentException e) {
+            return java.util.Collections.emptyList();
+        }
+        List<GuiListItem> items = new ArrayList<>();
+        List<UUID> ids = plugin.pwarpMeta().byOwner(ownerId);
+        for (UUID id : pageOf(ids, page, perPage)) {
+            PlayerWarp warp = plugin.playerWarpStore().find(id);
+            if (warp == null) {
+                continue;
+            }
+            items.add(buildPwarpItem(player, warp, false, true, false));
+        }
+        return items;
+    }
+
+    /** 构建玩家地标列表项物品与变量；favorite 视图显示收藏/取消提示。 */
+    private GuiListItem buildPwarpItem(Player player, PlayerWarp warp, boolean ownMenu,
+                                       boolean showFavorite, boolean isFavoriteView) {
+        ItemStack item = buildIconItem(warp.iconMaterial(), warp.iconCustomData(), warp.iconItemModel(),
+                PlayerWarp.DEFAULT_ICON);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("&a" + warp.name());
+            boolean fav = plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id());
+            java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
+                    "&7创建者: &f" + warp.ownerName(),
+                    "&7描述: &f" + (warp.description() == null ? "" : warp.description()),
+                    "&7费用: &f" + warp.cost(),
+                    "&7评分: &f" + String.format("%.1f", plugin.warpRatingStore() != null
+                            ? plugin.warpRatingStore().averageStars(warp.id()) : 0) + "★"));
+            lore.add("");
+            if (showFavorite) {
+                lore.add("&a[左键] 传送");
+                if (isFavoriteView) {
+                    lore.add("&c[Q键] 取消收藏");
+                } else {
+                    lore.add(fav ? "&c[Q键] 取消收藏" : "&e[Q键] 收藏");
+                }
+            } else {
+                lore.add("&a[左键] 传送");
+                lore.add("&e[右键] 评分");
+            }
+            meta.setLore(lore);
+            item.setItemMeta(meta);
+        }
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("pwarp_name", warp.name());
+        vars.put("pwarp_owner", warp.ownerName() == null ? "" : warp.ownerName());
+        vars.put("pwarp_description", warp.description() == null ? "" : warp.description());
+        vars.put("pwarp_cost", String.valueOf(warp.cost()));
+        vars.put("pwarp_cooldown", String.valueOf(warp.cooldownSeconds()));
+        vars.put("pwarp_stars", String.format("%.1f", plugin.warpRatingStore() != null
+                ? plugin.warpRatingStore().averageStars(warp.id()) : 0));
+        vars.put("pwarp_score", String.valueOf(plugin.warpRatingStore() != null
+                ? plugin.warpRatingStore().totalScore(warp.id()) : 0));
+        vars.put("pwarp_favorite", String.valueOf(plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id())));
+        vars.put("pwarp_icon", warp.iconMaterial() == null ? PlayerWarp.DEFAULT_ICON : warp.iconMaterial());
+        vars.put("pwarp_custom_data", warp.iconCustomData() == null ? "" : String.valueOf(warp.iconCustomData()));
+        vars.put("pwarp_item_model", warp.iconItemModel() == null ? "" : warp.iconItemModel());
+        return new GuiListItem(item, vars);
     }
 
     /** 构建玩家个人家列表；点击传送。 */

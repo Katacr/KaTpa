@@ -1,0 +1,37 @@
+title: '&8KaTpa &f按玩家筛选'
+
+Layout:
+  - '#########'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#1111111#'
+  - '#B#######'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "1":
+    type: 'PWARP_OWNERS'
+    display:
+      material: PLAYER_HEAD
+      skull_owner: '{owner_name}'
+      empty_text: '暂无玩家地标创建者'
+      name: '&a{owner_name}'
+      lore:
+        - '&7筛选该玩家创建的玩家地标'
+        - '&e点击筛选'
+    actions:
+      left:
+        - 'open: pwarp_owner_list:{owner_uuid}'
+  "B":
+    display:
+      material: ARROW
+      name: '&a返回'
+      lore:
+        - '&e返回玩家地标列表'
+    actions:
+      left:
+        - 'open: pwarp_selector'
