@@ -257,14 +257,14 @@ public final class PlayerWarpService {
 
     /** 本地传送并在成功后结算传送收入给创建者。 */
     private void teleportLocal(Player player, PlayerWarp warp, boolean isOwner, double cost) {
+        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), warp.world(),
+                "pwarp-world-unloaded", Map.of("name", warp.name()))) {
+            return;
+        }
         Location target = new Location(
                 Bukkit.getWorld(warp.world()),
                 warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch());
-        if (target.getWorld() == null) {
-            plugin.messages().send(player, "pwarp-world-unloaded", Map.of("name", warp.name()));
-            return;
-        }
         plugin.back().recordLocation(player);
         startCooldown(player, warp);
         plugin.teleports().beginDirect(player, "pwarp", () -> {
@@ -285,26 +285,31 @@ public final class PlayerWarpService {
         });
     }
 
-    /** 跨服传送并在落点后结算传送收入给创建者。 */
+    /** 跨服传送：先完成源服吟唱，再请求代理切服并在落点后结算传送收入给创建者。 */
     private void teleportCrossServer(Player player, PlayerWarp warp, boolean isOwner, double cost) {
+        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), null, null, null)) {
+            return;
+        }
         plugin.back().recordLocation(player);
         startCooldown(player, warp);
         org.katacr.katpa.model.LocationRecord loc = new org.katacr.katpa.model.LocationRecord(
                 warp.server(), warp.world(), warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch(), System.currentTimeMillis());
-        if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
-            if (Boolean.TRUE.equals(success)) {
-                plugin.pwarpMeta().recordVisit(player.getUniqueId(), warp.id());
-                if (!isOwner && cost > 0) {
-                    settleIncome(warp, cost);
+        plugin.teleports().beginDirect(player, "pwarp", () -> {
+            if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
+                if (Boolean.TRUE.equals(success)) {
+                    plugin.pwarpMeta().recordVisit(player.getUniqueId(), warp.id());
+                    if (!isOwner && cost > 0) {
+                        settleIncome(warp, cost);
+                    }
+                } else if (!Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "pwarp-failed",
+                            Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
                 }
-            } else if (!Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "pwarp-failed",
-                        Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+            })) {
+                plugin.messages().send(player, "proxy-unavailable");
             }
-        })) {
-            plugin.messages().send(player, "proxy-unavailable");
-        }
+        });
     }
 
     /** 结算传送收入：创建者在线直接入账，离线则挂账待领取。 */

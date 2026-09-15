@@ -34,7 +34,7 @@ public final class WarpRatingStore {
         thread.setDaemon(true);
         return thread;
     });
-    private Connection connection;
+    private JdbcConnectionManager connections;
     private boolean mysql;
 
     /** 创建绑定插件实例的评分存储。 */
@@ -42,13 +42,14 @@ public final class WarpRatingStore {
         this.plugin = plugin;
     }
 
-    /** 使用共享数据库连接初始化评分表与离线收入挂账表。 */
-    public void initialize(Connection sharedConnection, boolean mysql) throws SQLException {
-        this.connection = sharedConnection;
+    /** 使用共享连接管理器初始化评分表与离线收入挂账表。 */
+    public void initialize(JdbcConnectionManager connections, boolean mysql) throws SQLException {
+        this.connections = connections;
         this.mysql = mysql;
-        try (var statement = connection.createStatement()) {
-            if (mysql) {
-                statement.executeUpdate("""
+        connections.executeVoid(connection -> {
+            try (var statement = connection.createStatement()) {
+                if (mysql) {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS player_warp_rating (
                             player_uuid VARCHAR(36) NOT NULL,
                             warp_id VARCHAR(36) NOT NULL,
@@ -57,15 +58,15 @@ public final class WarpRatingStore {
                             PRIMARY KEY (player_uuid, warp_id)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-                statement.executeUpdate("""
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS player_warp_pending_income (
                             owner_uuid VARCHAR(36) NOT NULL,
                             amount DOUBLE NOT NULL,
                             PRIMARY KEY (owner_uuid)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-            } else {
-                statement.executeUpdate("""
+                } else {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS player_warp_rating (
                             player_uuid TEXT NOT NULL,
                             warp_id TEXT NOT NULL,
@@ -74,21 +75,22 @@ public final class WarpRatingStore {
                             PRIMARY KEY (player_uuid, warp_id)
                         )
                         """);
-                statement.executeUpdate("""
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS player_warp_pending_income (
                             owner_uuid TEXT NOT NULL,
                             amount REAL NOT NULL,
                             PRIMARY KEY (owner_uuid)
                         )
                         """);
+                }
             }
-        }
+        });
     }
 
     /** 记录或更新某玩家对某地标的评分（1-5 星）。 */
     public void rate(UUID playerUuid, UUID warpId, int stars) {
         long now = System.currentTimeMillis();
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO player_warp_rating(player_uuid, warp_id, stars, rated_at)
                     VALUES (?, ?, ?, ?)
@@ -110,13 +112,17 @@ public final class WarpRatingStore {
 
     /** 读取某玩家对某地标已有的评分，未评分返回 0。 */
     public int findRating(UUID playerUuid, UUID warpId) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT stars FROM player_warp_rating WHERE player_uuid=? AND warp_id=?")) {
-            stmt.setString(1, playerUuid.toString());
-            stmt.setString(2, warpId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next() ? rs.getInt("stars") : 0;
-            }
+        try {
+            return connections.execute(connection -> {
+                try (PreparedStatement stmt = connection.prepareStatement(
+                        "SELECT stars FROM player_warp_rating WHERE player_uuid=? AND warp_id=?")) {
+                    stmt.setString(1, playerUuid.toString());
+                    stmt.setString(2, warpId.toString());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        return rs.next() ? rs.getInt("stars") : 0;
+                    }
+                }
+            });
         } catch (SQLException e) {
             plugin.getLogger().severe("读取评分失败: " + e.getMessage());
             return 0;
@@ -125,15 +131,19 @@ public final class WarpRatingStore {
 
     /** 计算某地标的平均星级（1-5，未评分返回 0）。 */
     public double averageStars(UUID warpId) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT AVG(stars) AS avg, COUNT(*) AS cnt FROM player_warp_rating WHERE warp_id=?")) {
-            stmt.setString(1, warpId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next() && rs.getInt("cnt") > 0) {
-                    return rs.getDouble("avg");
+        try {
+            return connections.execute(connection -> {
+                try (PreparedStatement stmt = connection.prepareStatement(
+                        "SELECT AVG(stars) AS avg, COUNT(*) AS cnt FROM player_warp_rating WHERE warp_id=?")) {
+                    stmt.setString(1, warpId.toString());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next() && rs.getInt("cnt") > 0) {
+                            return rs.getDouble("avg");
+                        }
+                        return 0D;
+                    }
                 }
-                return 0;
-            }
+            });
         } catch (SQLException e) {
             plugin.getLogger().severe("计算平均星级失败: " + e.getMessage());
             return 0;
@@ -142,29 +152,38 @@ public final class WarpRatingStore {
 
     /** 计算某地标的累计加权得分（按权重公式求和）。 */
     public int totalScore(UUID warpId) {
-        int total = 0;
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT stars FROM player_warp_rating WHERE warp_id=?")) {
-            stmt.setString(1, warpId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    total += scoreOf(rs.getInt("stars"));
+        try {
+            return connections.execute(connection -> {
+                int total = 0;
+                try (PreparedStatement stmt = connection.prepareStatement(
+                        "SELECT stars FROM player_warp_rating WHERE warp_id=?")) {
+                    stmt.setString(1, warpId.toString());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            total += scoreOf(rs.getInt("stars"));
+                        }
+                    }
                 }
-            }
+                return total;
+            });
         } catch (SQLException e) {
             plugin.getLogger().severe("计算得分失败: " + e.getMessage());
+            return 0;
         }
-        return total;
     }
 
     /** 返回评分人数。 */
     public int ratingCount(UUID warpId) {
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT COUNT(*) AS cnt FROM player_warp_rating WHERE warp_id=?")) {
-            stmt.setString(1, warpId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next() ? rs.getInt("cnt") : 0;
-            }
+        try {
+            return connections.execute(connection -> {
+                try (PreparedStatement stmt = connection.prepareStatement(
+                        "SELECT COUNT(*) AS cnt FROM player_warp_rating WHERE warp_id=?")) {
+                    stmt.setString(1, warpId.toString());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        return rs.next() ? rs.getInt("cnt") : 0;
+                    }
+                }
+            });
         } catch (SQLException e) {
             plugin.getLogger().severe("统计评分人数失败: " + e.getMessage());
             return 0;
@@ -173,20 +192,25 @@ public final class WarpRatingStore {
 
     /** 返回按累计加权得分降序的前 limit 个地标 ID。 */
     public List<UUID> leaderboard(int limit) {
-        List<UUID> result = new ArrayList<>();
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT warp_id, SUM(stars) AS weighted FROM player_warp_rating GROUP BY warp_id " +
-                        "ORDER BY weighted DESC LIMIT ?")) {
-            stmt.setInt(1, limit);
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    result.add(UUID.fromString(rs.getString("warp_id")));
+        try {
+            return connections.execute(connection -> {
+                List<UUID> result = new ArrayList<>();
+                try (PreparedStatement stmt = connection.prepareStatement(
+                        "SELECT warp_id, SUM(stars) AS weighted FROM player_warp_rating GROUP BY warp_id " +
+                                "ORDER BY weighted DESC LIMIT ?")) {
+                    stmt.setInt(1, limit);
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            result.add(UUID.fromString(rs.getString("warp_id")));
+                        }
+                    }
                 }
-            }
+                return result;
+            });
         } catch (SQLException e) {
             plugin.getLogger().severe("读取排行榜失败: " + e.getMessage());
+            return new ArrayList<>();
         }
-        return result;
     }
 
     /** 累加某创建者的离线待领取收入（原子累加，避免并发覆盖）。 */
@@ -194,7 +218,7 @@ public final class WarpRatingStore {
         if (amount <= 0) {
             return;
         }
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO player_warp_pending_income(owner_uuid, amount)
                     VALUES (?, ?)
@@ -214,21 +238,23 @@ public final class WarpRatingStore {
 
     /** 读取并清空某创建者的离线待领取收入，无挂账返回 0。 */
     public double takePendingIncome(UUID ownerUuid) {
-        double amount = 0;
-        try (PreparedStatement select = connection.prepareStatement(
-                "SELECT amount FROM player_warp_pending_income WHERE owner_uuid=?")) {
-            select.setString(1, ownerUuid.toString());
-            try (ResultSet rs = select.executeQuery()) {
-                if (rs.next()) {
-                    amount = rs.getDouble("amount");
+        double amount;
+        try {
+            amount = connections.execute(connection -> {
+                try (PreparedStatement select = connection.prepareStatement(
+                        "SELECT amount FROM player_warp_pending_income WHERE owner_uuid=?")) {
+                    select.setString(1, ownerUuid.toString());
+                    try (ResultSet rs = select.executeQuery()) {
+                        return rs.next() ? rs.getDouble("amount") : 0D;
+                    }
                 }
-            }
+            });
         } catch (SQLException e) {
             plugin.getLogger().severe("读取待领取收入失败: " + e.getMessage());
             return 0;
         }
         if (amount > 0) {
-            executeUpdate(() -> {
+            executeUpdate(connection -> {
                 try (PreparedStatement del = connection.prepareStatement(
                         "DELETE FROM player_warp_pending_income WHERE owner_uuid=?")) {
                     del.setString(1, ownerUuid.toString());
@@ -239,7 +265,7 @@ public final class WarpRatingStore {
         return amount;
     }
 
-    /** 等待异步写入完成。连接由 SettingsStore 管理。 */
+    /** 等待异步写入完成。物理连接由 SettingsStore 管理。 */
     public void close() {
         databaseExecutor.shutdown();
         try {
@@ -256,7 +282,7 @@ public final class WarpRatingStore {
     private void executeUpdate(SqlOperation operation) {
         databaseExecutor.execute(() -> {
             try {
-                operation.run();
+                connections.executeVoid(operation::run);
             } catch (SQLException e) {
                 plugin.getLogger().severe("保存评分失败: " + e.getMessage());
             }
@@ -267,6 +293,6 @@ public final class WarpRatingStore {
     @FunctionalInterface
     private interface SqlOperation {
         /** 执行具体 SQL 写入。 */
-        void run() throws SQLException;
+        void run(Connection connection) throws SQLException;
     }
 }

@@ -12,7 +12,7 @@ import java.util.Map;
 
 /** 启动时检查配置文件版本，自动备份旧版并合并用户自定义值到新默认配置。 */
 public final class ConfigUpdater {
-    private static final int CURRENT_CONFIG_VERSION = 1;
+    private static final int CURRENT_CONFIG_VERSION = 3;
     private static final String CONFIG_VERSION_KEY = "config-version";
 
     private ConfigUpdater() {
@@ -47,8 +47,11 @@ public final class ConfigUpdater {
     /** 递归收集配置树中的叶子节点。 */
     private static void collectValues(ConfigurationSection section, String prefix, Map<String, Object> values) {
         for (String key : section.getKeys(false)) {
+            // 注意：ConfigurationSection.get() 的参数是相对该 section 的相对路径，
+            // 若误用含前缀的绝对路径，MemorySection 会在内部再拼一次导致取值为 null，
+            // 从而使所有嵌套 section 的叶子丢失（详见 2026-09-15 配置升级丢失用户值问题）。
+            Object value = section.get(key);
             String path = prefix.isEmpty() ? key : prefix + "." + key;
-            Object value = section.get(path);
             if (value instanceof ConfigurationSection sub) {
                 collectValues(sub, path, values);
             } else if (value instanceof List<?> || value instanceof Number || value instanceof String

@@ -76,6 +76,9 @@ public interface InteractionPlatform {
     /** 显示玩家个人家管理 Dialog，列出全部家并提供创建和删除入口。 */
     void showHomeManager(Player player);
 
+    /** 显示单个家的编辑界面（图标 / 更新位置 / 删除）。 */
+    void showHomeEditor(Player player, Home home);
+
     /** 插件关闭时释放平台实现持有的状态。 */
     void shutdown();
 }

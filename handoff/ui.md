@@ -1,6 +1,6 @@
 # UI 交互层（ui）
 
-> 最后更新：2026-09-07
+> 最后更新：2026-09-15（修复菜单列表条目颜色码未解析）
 
 ## 现状
 
@@ -31,6 +31,7 @@
 
 ## 踩过的坑
 
+- **列表条目颜色码未解析（2026-09-15）**：`GuiManager.buildItem` 对非列表按钮会 `ChatColor.translateAlternateColorCodes`，但 `KaTpaGuiListProvider` 预构建的列表条目（warp/home/pwarp/请求/在线玩家等）在 `renderMenu` 直接 `inv.setItem`，未做颜色翻译，导致名称/lore 中的 `&a` 等原样显示。修复：新增 `GuiManager.translateItemColors`，在放置列表条目时克隆物品并翻译 name/lore，与 `buildItem` 行为一致。
 - 单 JAR 必须反射探测平台类，避免 Spigot 服务端加载时因缺失 Paper Dialog 类触发 LinkageError（**已废弃：2026-09-07 迁移到 Inventory，移除 Dialog 探测**）。
 - Dialog 列表只在新增/处理/真正超时推送刷新，不定时刷新，避免刷屏；最后一条关闭后自动关 Dialog，不显空列表（**Inventory 版需重新实现此行为**）。
 
@@ -68,5 +69,9 @@
 **实现类**（`src/main/java/.../ui/inventory/gui/`）：`GuiManager`（加载/渲染/动作）、`GuiMenu`（解析）、`GuiMenuHolder`、`MenuSession`、`GuiActionHandler`、`GuiListProvider`/`GuiListItem`、`KaTpaGuiActions`、`KaTpaGuiListProvider`。`InventoryMenuListener` 同时识别 `GuiMenuHolder` 与编程式 `InventoryMenu`。
 
 **待办**：翻页（多页 layout）、请求接受/拒绝动作、聊天输入框（添加成员/新建地标/编辑字段）、`update` 定时刷新。详见 `INDEX.md` 的"GUI 资源驱动架构"节。
+
+**修复记录（2026-09-12）：** pwarp 编辑 GUI 的 D（描述）/C（冷却）/F（费用）/N（名称）按钮无响应。根因：`pwarp_editor.yml` 的 `katpa: pwarp set <field> {pwarp_name}` 只给 3 段参数，`KaTpaGuiActions.handlePlayerWarpSet` 却按"值内联在第 4 段"解析，`args.length < 4` 直接静默 return。修复：四个分支改用 `ChatInputManager.capture` 提示输入（与管理员 `handleWarp` 一致），设置后刷新编辑器/管理器。`KaTpaGuiActions.java:230`。
+
+**家编辑器（2026-09-15）：** 新增 `gui/home_editor.yml` 二级菜单（图标/更新位置/删除）；`home_selector.yml` 与 `home_manager.yml` 列表右键由「删除」改为 `katpa: home edit <name>` 打开编辑器。对应动作：`home edit/update/delete`；新增 `InteractionPlatform.showHomeEditor` 与 `HomeService.updateLocation`（保留描述/图标，仅更新坐标/世界/服务器）。图标/更新位置后经 `KaTpaGuiActions.reopenHomeMenu` 按来源菜单回编辑器或管理列表。
 
 **修复记录（2026-09-10）：** Hopper 漏斗窗口拒绝/接受按钮无响应。根因：`RequestHopperMenu.respond()` 使用 `p.performCommand("tpdeny " + requestId)` + `close()`，在库存关闭期间 `performCommand` 行为不可靠，命令可能未执行或执行不完整。修复：移除 `respond()` 方法，新增 `accept()`/`deny()` 两个私有方法，直接调用 `((KaTpaPlugin) plugin).requests().accept(p, request.id())` 和 `.deny(p, request.id())`，跳过命令解析层。同时移除未使用的 `UUID` 导入和 `render()` 中的 `requestId` 局部变量。

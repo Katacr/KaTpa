@@ -1,6 +1,6 @@
 # 服务层与命令层（services）
 
-> 最后更新：2026-09-07
+> 最后更新：2026-09-12
 
 ## 现状
 
@@ -20,6 +20,7 @@
 | DbackService | 死亡位置记录（权限槽位滚动）、`/dback [序号]` | `recordDeath(:37)` `dback(:54)` `maxSlots(:22)` |
 | WarpService | 地标传送（权限/冷却/Vault 付费/跨服）、管理接口 | `warp(:24)` `setWarp(:56)` `payCost(:207)` |
 | HomeService | 玩家私家（数量上限按权限）、跨服 | `home(:37)` `setHome(:60)` `maxHomes(:22)` |
+| PlayerListener | 玩家事件（加入/退出/移动/受伤/潜行/传送）+ **床右键自动设家（2026-09-15）** | `onBedInteract`（`PlayerInteractEvent` RIGHT_CLICK_BLOCK + `_BED` + 主手）→ `home().setHome(player, modules.home.bed-home-name)`；配置 `modules.home.bed-home`(默认 true)/`bed-home-name`(默认 重生点)；存在则覆盖、满员提示走 `setHome` 既有逻辑 |
 
 ## 请求生命周期要点
 
@@ -33,6 +34,10 @@
 - `begin/beginDirect/beginNetwork` 创建 `WarmupSession`，5 tick 间隔运行；每 1s 播放 countdown 音效 + warmup ActionBar + 粒子。
 - **中断**：`handleMove` 真实位移（非转视角）、`handleDamage` 未取消伤害、离线/被取消均中断。
 - `finish` 最终异步传送，回主线程通知双方；跨服用 `arriveNetwork` 在目标服落点。
+- **吟唱前目标校验（2026-09-12 新增）**：`TeleportService.ensureTargetAvailable(traveler, targetServer, targetWorld, worldMessageKey, worldArgs)` —— 目标在其它子服时要求 `network().isServerAvailable(targetServer)`（并 `available()`），同服时要求 `Bukkit.getWorld(targetWorld) != null`；失败发提示并返回 false，调用方据此不启动吟唱。
+  - 接入点：`back`/`dback`/`home`/`warp`/`pwarp` 的本服与跨服分支（共 10 处），以及 `beginNetwork`（tpa 跨服，用 `NetworkRequestData.destinationServer()`）。
+  - 新增语言键：`target-server-unavailable`、`target-world-unloaded`；本服世界未加载仍走各模块原有的 `*-world-unloaded` 键（含名称）。
+  - 跨服目标世界是否加载无法在源服判断，仍由目标服落点阶段（`handleArrival`/`arriveNetwork`）兜底校验。
 
 ## 命令与权限
 
@@ -57,6 +62,15 @@
 - Death：按槽位记录死亡位置。
 - Damage：有效伤害中断吟唱。
 - ToggleSneak：双击潜行状态机。
+- BedSleep（2026-09-15）：玩家入睡并设置**个人重生点**（`PlayerBedEnterEvent`，`getBedEnterResult()==OK`）时自动 `home().setHome`；重复睡同一张床通过比较 `player.getBedSpawnLocation()` 与床方块跳过（1.16.5 API 无 `isSpawnSet()`）。非 setworldspawn 全局出生点事件。
+
+## 家编辑器（2026-09-15）
+
+- `home_selector.yml` / `home_manager.yml` 的列表右键由「删除」改为 `katpa: home edit <name>` 打开新菜单 `home_editor.yml`。
+- `home_editor.yml` 提供三个按钮：图标（`home icon <name>`，手持物品设置）、更新位置（`home update <name>` → `HomeService.updateLocation`）、删除（`home delete <name>`）。
+- 新增 `InteractionPlatform.showHomeEditor(Player, Home)` + `InteractionService` 委托 + `InventoryInteractionPlatform` 实现（注入 home_* 变量）。
+- `KaTpaGuiActions.reopenHomeMenu`：图标/更新位置后按来源菜单回编辑器或管理列表。
+- `HomeService.updateLocation(Player, String)`：仅当家存在时以玩家当前位置覆盖坐标/世界/服务器，保留描述与图标。
 
 ## 踩过的坑
 
@@ -66,5 +80,5 @@
 
 ## 当前待办
 
-- **进行中重构**（未提交）：back/dback/home/warp 的跨服传送改为**先 `beginDirect` 吟唱再请求切服**（`BackService.teleportCrossServer`、`DbackService`、`HomeService.teleportCrossServer`、`WarpService.teleportCrossServer`）。需测试跨服吟唱中断后是否正确回滚 pendingBack 状态。
+- ~~进行中重构（未提交）：back/dback/home/warp 的跨服传送改为**先 `beginDirect` 吟唱再请求切服**~~ —— **2026-09-12 已完成**：`BackService`/`DbackService` 原有实现基础上，补齐 `HomeService.teleportCrossServer`、`WarpService.teleportCrossServer`、`PlayerWarpService.teleportCrossServer`，三者均在 `ensureTargetAvailable` 校验通过后调用 `beginDirect(module, () -> backRequest(...))`，做到本服/跨服吟唱一致（`modules.<module>.warmup-seconds`，默认 3s）。
 - 新增 `placeholder/` 模块（KaTpaPlaceholderExpansion）未提交，需补充占位符清单与文档到 services.md。

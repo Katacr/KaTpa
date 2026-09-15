@@ -188,14 +188,14 @@ public final class WarpService {
 
     /** 同服地标传送。 */
     private void teleportLocal(Player player, Warp warp) {
+        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), warp.world(),
+                "warp-world-unloaded", Map.of("name", warp.name()))) {
+            return;
+        }
         Location target = new Location(
                 Bukkit.getWorld(warp.world()),
                 warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch());
-        if (target.getWorld() == null) {
-            plugin.messages().send(player, "warp-world-unloaded", Map.of("name", warp.name()));
-            return;
-        }
         plugin.back().recordLocation(player);
         startCooldown(player, warp);
         plugin.teleports().beginDirect(player, "warp", () -> {
@@ -212,21 +212,26 @@ public final class WarpService {
         });
     }
 
-    /** 跨服地标传送：通过 KaProxy 切服后在目标服落点。 */
+    /** 跨服地标传送：先完成源服吟唱，再请求代理切服并在目标服落点。 */
     private void teleportCrossServer(Player player, Warp warp) {
+        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), null, null, null)) {
+            return;
+        }
         plugin.back().recordLocation(player);
         startCooldown(player, warp);
         org.katacr.katpa.model.LocationRecord loc = new org.katacr.katpa.model.LocationRecord(
                 warp.server(), warp.world(), warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch(), System.currentTimeMillis());
-        if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
-            if (!Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "warp-failed",
-                        Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+        plugin.teleports().beginDirect(player, "warp", () -> {
+            if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
+                if (!Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "warp-failed",
+                            Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+                }
+            })) {
+                plugin.messages().send(player, "proxy-unavailable");
             }
-        })) {
-            plugin.messages().send(player, "proxy-unavailable");
-        }
+        });
     }
 
     /** 返回玩家对指定地标的冷却剩余秒数，0 表示可用。 */

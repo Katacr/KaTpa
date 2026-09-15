@@ -27,7 +27,7 @@ public final class BackStore {
         thread.setDaemon(true);
         return thread;
     });
-    private Connection connection;
+    private JdbcConnectionManager connections;
     private boolean mysql;
 
     /** 创建绑定插件实例的返回位置存储。 */
@@ -35,13 +35,14 @@ public final class BackStore {
         this.plugin = plugin;
     }
 
-    /** 初始化表结构并从同一数据库连接加载数据。 */
-    public void initialize(Connection sharedConnection, boolean mysql) throws SQLException {
-        this.connection = sharedConnection;
+    /** 通过共享连接管理器初始化表结构。 */
+    public void initialize(JdbcConnectionManager connections, boolean mysql) throws SQLException {
+        this.connections = connections;
         this.mysql = mysql;
-        try (var statement = connection.createStatement()) {
-            if (mysql) {
-                statement.executeUpdate("""
+        connections.executeVoid(connection -> {
+            try (var statement = connection.createStatement()) {
+                if (mysql) {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS last_location (
                             player_id VARCHAR(36) PRIMARY KEY,
                             server VARCHAR(64) NOT NULL,
@@ -54,7 +55,7 @@ public final class BackStore {
                             timestamp BIGINT NOT NULL
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-                statement.executeUpdate("""
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS death_location (
                             player_id VARCHAR(36) NOT NULL,
                             slot INT NOT NULL,
@@ -69,8 +70,8 @@ public final class BackStore {
                             PRIMARY KEY (player_id, slot)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-            } else {
-                statement.executeUpdate("""
+                } else {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS last_location (
                             player_id TEXT PRIMARY KEY,
                             server TEXT NOT NULL,
@@ -83,7 +84,7 @@ public final class BackStore {
                             timestamp INTEGER NOT NULL
                         )
                         """);
-                statement.executeUpdate("""
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS death_location (
                             player_id TEXT NOT NULL,
                             slot INTEGER NOT NULL,
@@ -98,14 +99,15 @@ public final class BackStore {
                             PRIMARY KEY (player_id, slot)
                         )
                         """);
+                }
             }
-        }
+        });
     }
 
     /** 异步写入或更新玩家上次位置，并刷新内存缓存。 */
     public void setLastLocation(UUID playerId, LocationRecord location) {
         lastLocations.put(playerId, location);
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO last_location(player_id, server, world, x, y, z, yaw, pitch, timestamp)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -147,7 +149,8 @@ public final class BackStore {
             current.remove(current.size() - 1);
         }
         deathLocations.put(playerId, List.copyOf(current));
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
+            boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
                 try (PreparedStatement clear = connection.prepareStatement(
@@ -175,8 +178,15 @@ public final class BackStore {
                     insert.executeBatch();
                 }
                 connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+                throw exception;
             } finally {
-                connection.setAutoCommit(true);
+                connection.setAutoCommit(previousAutoCommit);
             }
         });
     }
@@ -188,36 +198,40 @@ public final class BackStore {
 
     /** 玩家进入子服时从共享数据库刷新其位置数据。 */
     public void refresh(UUID playerId) throws SQLException {
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT server, world, x, y, z, yaw, pitch, timestamp FROM last_location WHERE player_id=?")) {
-            stmt.setString(1, playerId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    lastLocations.put(playerId, new LocationRecord(
-                            rs.getString("server"), rs.getString("world"),
-                            rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
-                            rs.getFloat("yaw"), rs.getFloat("pitch"), rs.getLong("timestamp")));
+        connections.executeVoid(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT server, world, x, y, z, yaw, pitch, timestamp FROM last_location WHERE player_id=?")) {
+                stmt.setString(1, playerId.toString());
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        lastLocations.put(playerId, new LocationRecord(
+                                rs.getString("server"), rs.getString("world"),
+                                rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+                                rs.getFloat("yaw"), rs.getFloat("pitch"), rs.getLong("timestamp")));
+                    } else {
+                        lastLocations.remove(playerId);
+                    }
                 }
             }
-        }
-        List<LocationRecord> loaded = new ArrayList<>();
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT server, world, x, y, z, yaw, pitch, timestamp FROM death_location " +
-                        "WHERE player_id=? ORDER BY slot")) {
-            stmt.setString(1, playerId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    loaded.add(new LocationRecord(
-                            rs.getString("server"), rs.getString("world"),
-                            rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
-                            rs.getFloat("yaw"), rs.getFloat("pitch"), rs.getLong("timestamp")));
+            List<LocationRecord> loaded = new ArrayList<>();
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT server, world, x, y, z, yaw, pitch, timestamp FROM death_location " +
+                            "WHERE player_id=? ORDER BY slot")) {
+                stmt.setString(1, playerId.toString());
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        loaded.add(new LocationRecord(
+                                rs.getString("server"), rs.getString("world"),
+                                rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+                                rs.getFloat("yaw"), rs.getFloat("pitch"), rs.getLong("timestamp")));
+                    }
                 }
             }
-        }
-        deathLocations.put(playerId, List.copyOf(loaded));
+            deathLocations.put(playerId, List.copyOf(loaded));
+        });
     }
 
-    /** 等待异步写入完成并关闭资源（连接由 SettingsStore 管理）。 */
+    /** 等待异步写入完成（物理连接由 SettingsStore 管理）。 */
     public void close() {
         databaseExecutor.shutdown();
         try {
@@ -234,7 +248,7 @@ public final class BackStore {
     private void executeUpdate(SqlOperation operation) {
         databaseExecutor.execute(() -> {
             try {
-                operation.run();
+                connections.executeVoid(operation::run);
             } catch (SQLException e) {
                 plugin.getLogger().severe("保存返回位置失败: " + e.getMessage());
             }
@@ -245,6 +259,6 @@ public final class BackStore {
     @FunctionalInterface
     private interface SqlOperation {
         /** 执行具体 SQL 写入。 */
-        void run() throws SQLException;
+        void run(Connection connection) throws SQLException;
     }
 }

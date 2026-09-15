@@ -291,7 +291,7 @@ public final class GuiManager {
                 for (int i = 0; i < slots.size() && i < items.size(); i++) {
                     int slot = slots.get(i);
                     GuiListItem item = items.get(i);
-                    inv.setItem(slot, item.item());
+                    inv.setItem(slot, translateItemColors(item.item()));
                     slotContexts.put(slot, item.variables());
                 }
             }
@@ -322,6 +322,33 @@ public final class GuiManager {
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    /** 翻译列表条目物品的名称与描述颜色代码（克隆后处理，避免修改提供器内部对象）。 */
+    private ItemStack translateItemColors(ItemStack stack) {
+        if (stack == null || stack.getItemMeta() == null) {
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        boolean changed = false;
+        if (meta.hasDisplayName()) {
+            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', meta.getDisplayName()));
+            changed = true;
+        }
+        if (meta.hasLore()) {
+            List<String> colored = new java.util.ArrayList<>();
+            for (String line : meta.getLore()) {
+                colored.add(ChatColor.translateAlternateColorCodes('&', line));
+            }
+            meta.setLore(colored);
+            changed = true;
+        }
+        if (!changed) {
+            return stack;
+        }
+        ItemStack copy = stack.clone();
+        copy.setItemMeta(meta);
+        return copy;
     }
 
     /** 按菜单根 {@code update} 键设置的周期（tick）定时重渲染；无该键则不刷新。 */

@@ -4,13 +4,16 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.katacr.katpa.KaTpaPlugin;
 
 /** 将玩家上线、离线、移动、受伤与潜行事件转交给对应服务。 */
@@ -83,7 +86,25 @@ public final class PlayerListener implements Listener {
                 && plugin.back().isOwnTeleport(event.getPlayer().getUniqueId())) {
             return;
         }
+        if (isNegligibleTeleport(event)) {
+            return;
+        }
         plugin.back().recordLocation(event.getPlayer());
+    }
+
+    /** 同世界内传送且新位置与旧位置距离小于 modules.back.min-distance 时，视为无需更新 /back 的短距离传送。 */
+    private boolean isNegligibleTeleport(PlayerTeleportEvent event) {
+        org.bukkit.Location from = event.getFrom();
+        org.bukkit.Location to = event.getTo();
+        if (from == null || to == null || from.getWorld() == null || to.getWorld() == null
+                || !from.getWorld().equals(to.getWorld())) {
+            return false;
+        }
+        double minDistance = plugin.getConfig().getDouble("modules.back.min-distance", 16);
+        if (minDistance <= 0) {
+            return false;
+        }
+        return from.distanceSquared(to) < minDistance * minDistance;
     }
 
     /** 玩家死亡时按权限槽位记录死亡位置。 */
@@ -108,5 +129,28 @@ public final class PlayerListener implements Listener {
         if (event.isSneaking() && plugin.requests() != null) {
             plugin.requests().handleSneak(event.getPlayer());
         }
+    }
+
+    /** 玩家右键床时记录个人“重生点”家（白天/夜晚均可触发），已在该床记录过则跳过避免重复更新。 */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBedInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        if (event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+        org.bukkit.block.Block clicked = event.getClickedBlock();
+        if (clicked == null || !clicked.getType().name().endsWith("_BED")) {
+            return;
+        }
+        if (!plugin.moduleEnabled("home") || plugin.home() == null) {
+            return;
+        }
+        if (!plugin.getConfig().getBoolean("modules.home.bed-home", true)) {
+            return;
+        }
+        String name = plugin.getConfig().getString("modules.home.bed-home-name", "重生点");
+        plugin.home().setBedHome(event.getPlayer(), name, clicked);
     }
 }

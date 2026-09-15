@@ -24,14 +24,13 @@ button:
         - '&7服务器: &f{home_server}'
         - ''
         - '&a[左键] 传送'
-        - '&c[右键] 删除'
+        - '&e[右键] 编辑'
     actions:
       left:
         - 'command: home {home_name}'
         - 'close'
       right:
-        - 'katpa: home delete {home_name}'
-        - 'close'
+        - 'katpa: home edit {home_name}'
   "A":
     display:
       material: ANVIL

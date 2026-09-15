@@ -135,7 +135,7 @@ public final class KaTpaPlugin extends JavaPlugin {
         if (moduleEnabled("back") || moduleEnabled("dback")) {
             backStore = new BackStore(this);
             try {
-                backStore.initialize(settings.connection(), settings.isMysql());
+                backStore.initialize(settings.connections(), settings.isMysql());
             } catch (Exception e) {
                 getLogger().severe("KaTpa 返回位置数据库初始化失败: " + e.getMessage());
             }
@@ -149,7 +149,7 @@ public final class KaTpaPlugin extends JavaPlugin {
         if (moduleEnabled("warp")) {
             warpStore = new WarpStore(this);
             try {
-                warpStore.initialize(settings.connection(), settings.isMysql());
+                warpStore.initialize(settings.connections(), settings.isMysql());
             } catch (Exception e) {
                 getLogger().severe("KaTpa 地标数据库初始化失败: " + e.getMessage());
             }
@@ -158,7 +158,7 @@ public final class KaTpaPlugin extends JavaPlugin {
         if (moduleEnabled("home")) {
             homeStore = new HomeStore(this);
             try {
-                homeStore.initialize(settings.connection(), settings.isMysql());
+                homeStore.initialize(settings.connections(), settings.isMysql());
             } catch (Exception e) {
                 getLogger().severe("KaTpa 家位置数据库初始化失败: " + e.getMessage());
             }
@@ -167,19 +167,19 @@ public final class KaTpaPlugin extends JavaPlugin {
         if (moduleEnabled("pwarp")) {
             playerWarpStore = new PlayerWarpStore(this);
             try {
-                playerWarpStore.initialize(settings.connection(), settings.isMysql());
+                playerWarpStore.initialize(settings.connections(), settings.isMysql());
             } catch (Exception e) {
                 getLogger().severe("KaTpa 玩家地标数据库初始化失败: " + e.getMessage());
             }
             warpRatingStore = new WarpRatingStore(this);
             try {
-                warpRatingStore.initialize(settings.connection(), settings.isMysql());
+                warpRatingStore.initialize(settings.connections(), settings.isMysql());
             } catch (Exception e) {
                 getLogger().severe("KaTpa 玩家地标评分数据库初始化失败: " + e.getMessage());
             }
             pwarpMetaStore = new PwarpMetaStore(this);
             try {
-                pwarpMetaStore.initialize(settings.connection(), settings.isMysql());
+                pwarpMetaStore.initialize(settings.connections(), settings.isMysql());
             } catch (Exception e) {
                 getLogger().severe("KaTpa 玩家地标元数据初始化失败: " + e.getMessage());
             }

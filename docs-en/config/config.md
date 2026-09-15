@@ -27,6 +27,7 @@ modules:
     warmup-seconds: 3
     sounds: true
     particles: true
+    min-distance: 16
   dback:
     enabled: true
     warmup: true
@@ -52,6 +53,8 @@ modules:
     sounds: true
     particles: true
     default-amount: 1
+    bed-home: true
+    bed-home-name: 重生点
     name-max-length: 32
     description-max-length: 100
   pwarp:
@@ -77,6 +80,7 @@ modules:
 | `modules.tpa.allow-cross-world` | `true` | Allows teleports between worlds |
 | `modules.tpa.disabled-worlds` | `[]` | World names where KaTpa cannot be used |
 | `modules.back.enabled` | `true` | Return to previous location (/back) |
+| `modules.back.min-distance` | `16` | For teleports within the same world, skip updating the /back point when the new location is closer than this many blocks to the old one; `0` always records |
 | `modules.dback.enabled` | `true` | Return to death location (/dback) |
 | `modules.dback.default-amount` | `1` | Default death location save count without `katpa.dback.amount.<n>` permission |
 | `modules.warp.enabled` | `true` | Public warp teleportation (/warp, /setwarp, /delwarp) |
@@ -93,6 +97,8 @@ modules:
 | `modules.pwarp.description-max-length` | `100` | Maximum player warp description length (validated on set description) |
 | `modules.home.enabled` | `true` | Personal home teleportation (/home, /sethome, /delhome) |
 | `modules.home.default-amount` | `1` | Default home limit without `katpa.home.amount.<n>` permission |
+| `modules.home.bed-home` | `true` | Create/overwrite the home named `bed-home-name` when a player sleeps and sets their personal respawn point (first time using that bed) |
+| `modules.home.bed-home-name` | `重生点` | Home name auto-created when the player sets their respawn point in a bed |
 | `modules.home.name-max-length` | `32` | Maximum home name length (validated on rename/create) |
 | `modules.home.description-max-length` | `100` | Maximum home description length (validated on set description) |
 
@@ -149,6 +155,8 @@ storage:
 ```
 
 Networks should use a MySQL or MariaDB database shared by every backend server. Restart the server after changing `storage.type` or `storage.mysql`.
+
+KaTpa periodically validates its long-lived database connection and reconnects automatically after MySQL/MariaDB closes it because of an idle timeout or a temporary interruption. JDBC operations from all storage modules are serialized to prevent concurrent transactions from interfering with each other on the shared connection. A write that fails while already in progress is not replayed automatically, which avoids duplicating non-idempotent operations such as income increments. The failed connection is invalidated, the next database operation uses a new connection, and the original failure remains visible in the server log.
 
 ## Reloading
 

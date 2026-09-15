@@ -1,14 +1,15 @@
 # KaTpa 交接文件索引
 
 > 项目：KaTpa —— 面向 Paper 1.21.7 / Spigot 1.21.6+、JDK 21 的玩家传送插件
-> 最后更新：2026-09-10（warp/home 图标与描述扩展，item_model 反射方案，/katpa warp 管理指令重构，玩家公共地标模块，历史传送/玩家筛选/收藏增强，Q 键收藏交互，MySQL TEXT DEFAULT 修复，Hopper 拒绝按钮修复）
+> 最后更新：2026-09-16（数据库连接失效检测、自动重连与跨 Store 串行化）
 
 ## 项目概览
 
 - **技术栈**：Gradle（Kotlin DSL）+ ShadowJar，单 JAR 同时编译 `src/main`（Paper 适配器）与 `src/spigot`（Spigot 适配器）两个 sourceSet。
 - **运行平台**：启动时通过 `Class.forName` 反射探测 `io.papermc.paper.dialog.Dialog` 或 `net.md_5.bungee.api.dialog.Dialog`，自动选择 Paper 原生 Dialog 或 Spigot Bungee Dialog 实现，单 JAR 跨平台启动。
 - **依赖下载**：仅内置 Libby（`net.byteflux:libby-bukkit`），首次开服按 `storage.type`（sqlite/mysql）下载 SQLite JDBC 或 MariaDB JDBC 到服务器 `libraries/` 目录。
-- **当前版本**：`1.1.0`（`build.gradle.kts:8`）。
+- **当前版本**：`1.2.1`（`build.gradle.kts:8`）。
+- **部署状态**：1.2.1 已于 2026-09-16 部署到 Lobby 并重启验证；其余 6 个后端仍为 1.2.0，尚未同步。
 - **构建**：`./gradlew clean build` → `build/libs/KaTpa-1.0.0.jar`（注意 archiveClassifier 为空，实际文件名随 version 变）；本地测试服 `./gradlew runServer`（1.21.7）。
 
 ## 模块划分与文档
@@ -183,9 +184,28 @@
 
 **修复记录（2026-09-10）：** Hopper 漏斗窗口拒绝/接受按钮无响应（`/tpdeny` 命令正常）。根因：`RequestHopperMenu.respond()` 用 `p.performCommand("tpdeny " + requestId)` + `close()`，在库存关闭期间 `performCommand` 行为不可靠，命令可能未执行。修复：移除通用 `respond()` 方法，新增 `accept()`/`deny()` 私有方法，直接调用 `((KaTpaPlugin) plugin).requests().accept(p, request.id())` / `.deny(p, request.id())`，绕过命令解析层。改动文件：`RequestHopperMenu.java`（+`KaTpaPlugin` 导入，-`UUID` 导入，-`requestId` 局部变量，新增两个方法）。已 `shadowJar` 构建通过。
 
+**修复记录（2026-09-12）：** 创建/保存玩家地标报 `保存玩家地标失败: (conn=xxx) Parameter at position 18 is not set`。根因：`PlayerWarpStore.save()` 的 `INSERT ... VALUES(?,...,?)` 共 18 列/占位符，但 `setString(5, server)` 之后**漏绑 `world`**，后续参数整体错位 1 位，末尾 `created_at`（第 18 位）始终未设置 → JDBC 抛 "Parameter at position 18 is not set"。修复：在 `server` 后补 `stmt.setString(6, warp.world())`，并把 x/y/z/yaw/pitch/description/icon_*/cost/cooldown/created_at 依次后移到 7–18。已 `./gradlew build` 通过（JDK 21，`JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64`）。
+
+**修复记录（2026-09-12 续）：** `/setwarp` 报同样错误 `保存地标失败: Parameter at position 18 is not set`。根因：**`WarpStore.save()` 存在完全相同的漏绑**——列清单为 `id,name,server,world,x,...,created_at,updated_at`（18 列），但 `setString(3, server)` 后直接 `setDouble(4, x)`，漏绑 `world`，导致末位 `updated_at`（第 18 位）未设置。此前排查误判为"WarpStore 无此问题"（当时 grep 按 `setString(5, server)` 位置匹配，而 WarpStore 的 server 在第 3 位），已纠正。修复：补 `stmt.setString(4, warp.world())` 并将后续参数后移到 5–18。已重新 `./gradlew build` 通过。**教训：核对列与参数必须逐位对照，不能靠固定序号 grep；同批 SQL 代码易复制传播同一缺陷。** 复核其余 store：`HomeStore`（15/15，world 在第 5 位）、`BackStore`（last_location 9/9、death_location 10/10）、`PwarpMetaStore`/`WarpRatingStore` 均一一对应，无此问题。
+
+**部署与验证（2026-09-12）：** 构建产物 `build/libs/KaTpa-1.2.0.jar`（SHA-256 `4dbc7971...c2aee009`）已复制到 7 个后端服务器；仅 Lobby 经 `mcsm restart lobby` 重启验证，KaTpa v1.2.0 正常加载、`/katap reload` 正常。另用共享 MySQL 以事务回滚方式验证：旧绑定精确复现 `Parameter at position 18 is not set`，新绑定 18 位成功。其余 6 服待重启生效。详见 `/home/Server/handoff/plugin-sync.md`。
+
+> 附：日志 `语言文件已自动补全缺失键: pwarp-created` 为 INFO 级自愈行为（服务器磁盘上的旧 `lang/zh_CN.yml` 缺该键，`MessageService` 从 JAR 默认补写），非错误。
+
+**修复记录（2026-09-12）：** pwarp 编辑 GUI 内「修改名称/描述/冷却/费用」按钮点击无反应。根因：`pwarp_editor.yml` 动作只传 3 段（`katpa: pwarp set desc {pwarp_name}`），而 `KaTpaGuiActions.handlePlayerWarpSet` 旧实现要求 `args.length >= 4`（把新值当作命令内联参数），条件不满足时**静默 return**，既不提示也不改值；对比管理员 warp 处理器 `handleWarp` 早已用 `ChatInputManager` 聊天捕获输入。修复：将 `handlePlayerWarpSet` 的 name/cost/cooldown/desc 四个分支统一改为 `chat.capture(...)` 提示输入（cancel 取消），设置后 `showPwarpEditor` 刷新；改名后回 `showPwarpManager`。改动文件：`KaTpaGuiActions.java:230`（`handlePlayerWarpSet`）。已 `./gradlew build` 通过。
+
+**新增（2026-09-12）——吟唱前目标可用性校验：** 所有传送（tpa/back/dback/home/warp/pwarp）在开始吟唱前校验目标是否可达，失败则不吟唱并提示。
+- KaProxy 侧：presence 包追加在线子服列表（`ProxyAdapter.servers()` + `pingServers()` 周期性 ping 探活，Velocity/Bungee 各自实现），只下发在线子服。
+- KaTpa 侧：`CrossServerService` 解析并缓存服务器列表，新增 `isServerAvailable(name)`（列表未知时退化为仅要求代理连通，兼容旧版代理）；`TeleportService.ensureTargetAvailable(...)` 统一同服世界/跨服子服校验，接入 10 处本服+跨服分支与 `beginNetwork`。
+- 新增语言键 `target-server-unavailable`、`target-world-unloaded`。详见 `handoff/services.md`、`handoff/network.md` 与 `/home/Plugins/KaProxy/handoff/presence.md`。
+
+**修复记录（2026-09-12）：** 跨服 warp/pwarp/home 传送跳过吟唱直接切服（本服有 3s 吟唱）。根因：`HomeService`/`WarpService`/`PlayerWarpService` 的 `teleportCrossServer` 未走 `beginDirect`，直接 `backRequest`；`BackService`/`DbackService` 早已修正。修复：三者在校验后调用 `beginDirect(module, () -> backRequest(...))`，跨服吟唱与本服一致（`modules.<module>.warmup-seconds`）。`./gradlew build` 通过并已部署。
+
+**新增（2026-09-12）——back 短距离传送忽略记录：** `PlayerListener.onTeleport` 新增 `isNegligibleTeleport(event)`：同世界且 `from.distanceSquared(to) < min-distance²` 时跳过 `back().recordLocation`，避免短距离插件传送覆盖 `/back` 位置。新增配置 `modules.back.min-distance`（默认 16，0=始终记录），`config-version` 提升到 2（`ConfigUpdater.CURRENT_CONFIG_VERSION=2`），旧配置启动时自动备份并合并。
+
 ## 关键约定
 
 - 模块开关 `modules.<name>.enabled`（默认 true）控制服务创建与命令注册；关闭模块注册统一 `module-disabled` 提示。
-- 存储层单连接模式：`SettingsStore` 持有唯一物理 `Connection`，其余 store 共享。
+- 存储层集中连接管理：`SettingsStore` 持有唯一 `JdbcConnectionManager`，其余 store 通过 callback 使用连接；管理器负责跨 Store 串行化、MySQL 失效检查和后续操作自动重连。
 - 所有写操作经各 store 单线程池异步落盘。
 - 消息与界面文本走 `lang/zh_CN.yml`，缺失键自动补全并写回磁盘。

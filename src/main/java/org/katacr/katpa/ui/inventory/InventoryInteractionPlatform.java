@@ -251,6 +251,22 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
     }
 
     @Override
+    public void showHomeEditor(Player player, Home home) {
+        java.util.Map<String, String> vars = new java.util.HashMap<>();
+        if (home != null) {
+            vars.put("home_name", home.name());
+            vars.put("home_world", home.world());
+            vars.put("home_server", home.server());
+            vars.put("home_description", home.description() == null ? "" : home.description());
+            vars.put("home_icon", home.iconMaterial() == null || home.iconMaterial().isBlank()
+                    ? org.katacr.katpa.model.Home.DEFAULT_ICON : home.iconMaterial());
+            vars.put("home_custom_data", home.iconCustomData() == null ? "" : String.valueOf(home.iconCustomData()));
+            vars.put("home_item_model", home.iconItemModel() == null ? "" : home.iconItemModel());
+        }
+        gui.openMenu(player, "home_editor", "", vars);
+    }
+
+    @Override
     public void shutdown() {
         // 菜单会话随玩家退出/关服自动清理，无需额外操作。
     }

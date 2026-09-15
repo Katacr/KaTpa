@@ -1,0 +1,53 @@
+title: '&8KaTpa &f编辑家: &f{home_name}'
+
+Layout:
+  - '#########'
+  - '#  I U  #'
+  - '#  D X  #'
+  - '#########'
+
+button:
+  "#":
+    display:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ' '
+  "I":
+    display:
+      material: {home_icon}
+      custom_data: '{home_custom_data}'
+      item_model: '{home_item_model}'
+      name: '&a图标: &f{home_icon}'
+      lore:
+        - '&7手持物品点击设置图标'
+        - '&e点击设置'
+    actions:
+      left:
+        - 'katpa: home icon {home_name}'
+  "U":
+    display:
+      material: ENDER_PEARL
+      name: '&a更新位置'
+      lore:
+        - '&7将家的位置更新为当前位置'
+        - '&7当前: &f{home_world} &f{home_server}'
+        - '&e点击更新'
+    actions:
+      left:
+        - 'katpa: home update {home_name}'
+  "D":
+    display:
+      material: TNT
+      name: '&c删除这个家'
+      lore:
+        - '&7删除家 &f{home_name}'
+        - '&e点击删除'
+    actions:
+      left:
+        - 'katpa: home delete {home_name}'
+  "X":
+    display:
+      material: BARRIER
+      name: '&c关闭'
+    actions:
+      left:
+        - 'close'

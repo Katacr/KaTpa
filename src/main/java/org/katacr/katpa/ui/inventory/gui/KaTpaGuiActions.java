@@ -231,46 +231,35 @@ public final class KaTpaGuiActions implements GuiActionHandler {
         String field = args[1].toLowerCase();
         String name = args[2];
         switch (field) {
-            case "name" -> {
-                if (args.length < 4) {
-                    return;
-                }
-                plugin.playerWarp().rename(player, name, args[3]);
-                plugin.interactions().showPwarpManager(player);
-            }
-            case "cost" -> {
-                if (args.length < 4) {
-                    return;
-                }
+            case "name" -> chat.capture(player, "§a请输入新的地标名称（输入 cancel 取消）：", (p, newName) -> {
+                plugin.playerWarp().rename(p, name, newName);
+                plugin.interactions().showPwarpManager(p);
+            });
+            case "cost" -> chat.capture(player, "§a请输入新的传送费用（输入 cancel 取消）：", (p, value) -> {
                 try {
-                    plugin.playerWarp().setCost(player, name, Double.parseDouble(args[3].trim()));
+                    plugin.playerWarp().setCost(p, name, Double.parseDouble(value.trim()));
                 } catch (NumberFormatException e) {
-                    plugin.messages().send(player, "invalid-number");
+                    plugin.messages().send(p, "invalid-number");
                 }
-            }
-            case "cooldown" -> {
-                if (args.length < 4) {
-                    return;
-                }
+                plugin.interactions().showPwarpEditor(p, plugin.playerWarpStore().find(name));
+            });
+            case "cooldown" -> chat.capture(player, "§a请输入新的冷却秒数（输入 cancel 取消）：", (p, value) -> {
                 try {
-                    plugin.playerWarp().setCooldown(player, name, Integer.parseInt(args[3].trim()));
+                    plugin.playerWarp().setCooldown(p, name, Integer.parseInt(value.trim()));
                 } catch (NumberFormatException e) {
-                    plugin.messages().send(player, "invalid-number");
+                    plugin.messages().send(p, "invalid-number");
                 }
-            }
-            case "desc", "description" -> {
-                if (args.length < 4) {
-                    return;
-                }
-                String desc = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
-                plugin.playerWarp().setDescription(player, name, desc);
-                plugin.interactions().showPwarpEditor(player, plugin.playerWarpStore().find(name));
-            }
+                plugin.interactions().showPwarpEditor(p, plugin.playerWarpStore().find(name));
+            });
+            case "desc", "description" -> chat.capture(player, "§a请输入新的描述（输入 cancel 取消）：", (p, value) -> {
+                plugin.playerWarp().setDescription(p, name, value);
+                plugin.interactions().showPwarpEditor(p, plugin.playerWarpStore().find(name));
+            });
             default -> plugin.getLogger().warning("未知的 pwarp set 字段: " + field);
         }
     }
 
-    /** 处理家相关动作：home create / home delete <name> / home set <field> <name> / home icon <name> / home rename <name>。 */
+    /** 处理家相关动作：home create / home edit <name> / home delete <name> / home update <name> / home set <field> <name> / home icon <name> / home rename <name>。 */
     private void handleHome(Player player, String rest, MenuSession session) {
         String[] args = rest.split("\\s+");
         if (args.length >= 1 && "create".equalsIgnoreCase(args[0])) {
@@ -278,10 +267,23 @@ public final class KaTpaGuiActions implements GuiActionHandler {
                 p.performCommand("sethome " + name);
                 plugin.interactions().showHomeManager(p);
             });
+        } else if (args.length >= 2 && "edit".equalsIgnoreCase(args[0])) {
+            String name = args[1];
+            org.katacr.katpa.model.Home home = plugin.homeStore().find(player.getUniqueId(), name);
+            if (home == null) {
+                plugin.messages().send(player, "home-not-found", java.util.Map.of("name", name));
+                return;
+            }
+            plugin.interactions().showHomeEditor(player, home);
         } else if (args.length >= 2 && "delete".equalsIgnoreCase(args[0])) {
             String name = args[1];
             player.performCommand("delhome " + name);
             plugin.interactions().showHomeManager(player);
+        } else if (args.length >= 2 && "update".equalsIgnoreCase(args[0])) {
+            String name = args[1];
+            if (plugin.home().updateLocation(player, name)) {
+                plugin.interactions().showHomeEditor(player, plugin.homeStore().find(player.getUniqueId(), name));
+            }
         } else if (args.length >= 3 && "set".equalsIgnoreCase(args[0])) {
             String field = args[1].toLowerCase();
             String name = args[2];
@@ -310,6 +312,15 @@ public final class KaTpaGuiActions implements GuiActionHandler {
             }
             plugin.home().setIcon(player.getUniqueId(), name, hand);
             plugin.messages().send(player, "home-icon-updated", java.util.Map.of("name", name));
+            reopenHomeMenu(player, session, name);
+        }
+    }
+
+    /** 家的图标/更新位置等编辑动作后按来源菜单决定回到编辑器还是管理列表。 */
+    private void reopenHomeMenu(Player player, MenuSession session, String homeName) {
+        if (session != null && "home_editor".equals(session.menuId())) {
+            plugin.interactions().showHomeEditor(player, plugin.homeStore().find(player.getUniqueId(), homeName));
+        } else {
             plugin.interactions().showHomeManager(player);
         }
     }

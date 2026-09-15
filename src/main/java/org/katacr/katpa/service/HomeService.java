@@ -9,10 +9,13 @@ import org.katacr.katpa.model.LocationRecord;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** 管理玩家个人家位置传送，包含数量限制和跨服协调。 */
 public final class HomeService {
     private final KaTpaPlugin plugin;
+    /** 每个玩家最近一次自动设置“重生点”家的床方块标识（世界:x:y:z），用于右键床去重。 */
+    private final Map<UUID, String> lastBedHomes = new ConcurrentHashMap<>();
 
     /** 创建绑定插件服务的家位置服务。 */
     public HomeService(KaTpaPlugin plugin) {
@@ -91,6 +94,39 @@ public final class HomeService {
         return true;
     }
 
+    /** 右键床自动设置“重生点”家：同一张床首次点击才更新，重复点击同一张床跳过（内存去重，重启后失效可接受）。 */
+    public boolean setBedHome(Player player, String name, org.bukkit.block.Block bed) {
+        String bedKey = bedKey(bed);
+        if (bedKey == null) {
+            return false;
+        }
+        if (bedKey.equals(lastBedHomes.get(player.getUniqueId()))) {
+            return false;
+        }
+        if (!setHome(player, name)) {
+            return false;
+        }
+        lastBedHomes.put(player.getUniqueId(), bedKey);
+        return true;
+    }
+
+    /** 计算整张床的统一标识：以“床头”（HEAD）所在格的世界与坐标为准，头/脚两格归一到同一个 key。 */
+    private static String bedKey(org.bukkit.block.Block bed) {
+        org.bukkit.block.data.type.Bed data;
+        try {
+            if (!(bed.getBlockData() instanceof org.bukkit.block.data.type.Bed bedData)) {
+                return null;
+            }
+            data = bedData;
+        } catch (Exception ignored) {
+            return null;
+        }
+        org.bukkit.block.Block head = data.getPart() == org.bukkit.block.data.type.Bed.Part.HEAD
+                ? bed
+                : bed.getRelative(data.getFacing());
+        return head.getWorld().getName() + ":" + head.getX() + ":" + head.getY() + ":" + head.getZ();
+    }
+
     /** 玩家删除家位置。 */
     public boolean delHome(Player player, String name) {
         Home home = plugin.homeStore().find(player.getUniqueId(), name);
@@ -100,6 +136,24 @@ public final class HomeService {
         }
         plugin.homeStore().remove(player.getUniqueId(), name);
         plugin.messages().send(player, "home-deleted", Map.of("name", name));
+        return true;
+    }
+
+    /** 更新家的位置为玩家当前位置（保留描述与图标），返回是否成功。 */
+    public boolean updateLocation(Player player, String name) {
+        Home home = plugin.homeStore().find(player.getUniqueId(), name);
+        if (home == null) {
+            plugin.messages().send(player, "home-not-found", Map.of("name", name));
+            return false;
+        }
+        Location loc = player.getLocation();
+        String server = plugin.network().serverId();
+        Home updated = new Home(home.id(), home.ownerId(), home.name(), server, loc.getWorld().getName(),
+                loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch(),
+                home.description(), home.iconMaterial(), home.iconCustomData(), home.iconItemModel(),
+                home.createdAt());
+        plugin.homeStore().save(updated);
+        plugin.messages().send(player, "home-updated", Map.of("name", name));
         return true;
     }
 
@@ -145,14 +199,14 @@ public final class HomeService {
 
     /** 同服家传送。 */
     private void teleportLocal(Player player, Home home) {
+        if (!plugin.teleports().ensureTargetAvailable(player, home.server(), home.world(),
+                "home-world-unloaded", Map.of("name", home.name()))) {
+            return;
+        }
         Location target = new Location(
                 Bukkit.getWorld(home.world()),
                 home.x(), home.y(), home.z(),
                 home.yaw(), home.pitch());
-        if (target.getWorld() == null) {
-            plugin.messages().send(player, "home-world-unloaded", Map.of("name", home.name()));
-            return;
-        }
         plugin.back().recordLocation(player);
         plugin.teleports().beginDirect(player, "home", () -> {
             plugin.back().markOwnTeleport(player.getUniqueId());
@@ -168,20 +222,25 @@ public final class HomeService {
         });
     }
 
-    /** 跨服家传送：通过 KaProxy 切服后在目标服落点。 */
+    /** 跨服家传送：先完成源服吟唱，再请求代理切服并在目标服落点。 */
     private void teleportCrossServer(Player player, Home home) {
+        if (!plugin.teleports().ensureTargetAvailable(player, home.server(), null, null, null)) {
+            return;
+        }
         plugin.back().recordLocation(player);
         LocationRecord loc = new LocationRecord(
                 home.server(), home.world(), home.x(), home.y(), home.z(),
                 home.yaw(), home.pitch(), System.currentTimeMillis());
-        if (!plugin.network().backRequest(player, home.server(), loc, success -> {
-            if (!Boolean.TRUE.equals(success)) {
-                plugin.messages().send(player, "home-failed",
-                        Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+        plugin.teleports().beginDirect(player, "home", () -> {
+            if (!plugin.network().backRequest(player, home.server(), loc, success -> {
+                if (!Boolean.TRUE.equals(success)) {
+                    plugin.messages().send(player, "home-failed",
+                            Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
+                }
+            })) {
+                plugin.messages().send(player, "proxy-unavailable");
             }
-        })) {
-            plugin.messages().send(player, "proxy-unavailable");
-        }
+        });
     }
 
     /** 基于现有 Home 复制全部字段的可变构造器。 */

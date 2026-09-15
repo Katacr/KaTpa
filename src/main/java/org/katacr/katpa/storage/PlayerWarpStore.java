@@ -1,5 +1,6 @@
 package org.katacr.katpa.storage;
 
+import org.bukkit.Bukkit;
 import org.katacr.katpa.KaTpaPlugin;
 import org.katacr.katpa.model.PlayerWarp;
 
@@ -10,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -22,6 +24,8 @@ import java.util.concurrent.TimeUnit;
 
 /** 持久化玩家创建的公共地标定义，支持 SQLite 单服和 MySQL 跨服共享。 */
 public final class PlayerWarpStore {
+    /** 数据变更广播主题，供其他子服刷新缓存。 */
+    private static final String SYNC_TOPIC = "player_warp";
     private final KaTpaPlugin plugin;
     private final ConcurrentMap<UUID, PlayerWarp> warps = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, UUID> nameIndex = new ConcurrentHashMap<>();
@@ -31,7 +35,7 @@ public final class PlayerWarpStore {
         thread.setDaemon(true);
         return thread;
     });
-    private Connection connection;
+    private JdbcConnectionManager connections;
     private boolean mysql;
 
     /** 创建绑定插件实例的玩家地标存储。 */
@@ -39,13 +43,14 @@ public final class PlayerWarpStore {
         this.plugin = plugin;
     }
 
-    /** 使用共享数据库连接初始化表结构并加载全部玩家地标。 */
-    public void initialize(Connection sharedConnection, boolean mysql) throws SQLException {
-        this.connection = sharedConnection;
+    /** 使用共享连接管理器初始化表结构并加载全部玩家地标。 */
+    public void initialize(JdbcConnectionManager connections, boolean mysql) throws SQLException {
+        this.connections = connections;
         this.mysql = mysql;
-        try (var statement = connection.createStatement()) {
-            if (mysql) {
-                statement.executeUpdate("""
+        connections.executeVoid(connection -> {
+            try (var statement = connection.createStatement()) {
+                if (mysql) {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS player_warp (
                             id VARCHAR(36) PRIMARY KEY,
                             owner_id VARCHAR(36) NOT NULL,
@@ -67,8 +72,8 @@ public final class PlayerWarpStore {
                             created_at BIGINT NOT NULL
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-            } else {
-                statement.executeUpdate("""
+                } else {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS player_warp (
                             id TEXT PRIMARY KEY,
                             owner_id TEXT NOT NULL,
@@ -90,41 +95,82 @@ public final class PlayerWarpStore {
                             created_at INTEGER NOT NULL
                         )
                         """);
+                }
             }
-        }
+        });
         loadAll();
     }
 
     /** 从数据库加载全部玩家地标到内存。 */
     public void loadAll() throws SQLException {
-        warps.clear();
-        nameIndex.clear();
-        ownerIndex.clear();
-        try (var statement = connection.createStatement();
-             var rs = statement.executeQuery(
-                      "SELECT id, owner_id, owner_name, name, server, world, x, y, z, yaw, pitch, " +
-                              "description, icon_material, icon_custom_data, icon_item_model, cost, " +
-                              "cooldown_seconds, created_at FROM player_warp")) {
-            while (rs.next()) {
-                PlayerWarp warp = new PlayerWarp(
-                        UUID.fromString(rs.getString("id")),
-                        UUID.fromString(rs.getString("owner_id")),
-                        rs.getString("owner_name"),
-                        rs.getString("name"),
-                        rs.getString("server"),
-                        rs.getString("world"),
-                        rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
-                        rs.getFloat("yaw"), rs.getFloat("pitch"),
-                        rs.getString("description"),
-                        rs.getString("icon_material"),
-                        rs.getObject("icon_custom_data") == null ? null : rs.getInt("icon_custom_data"),
-                        rs.getString("icon_item_model"),
-                        rs.getDouble("cost"),
-                        rs.getInt("cooldown_seconds"),
-                        rs.getLong("created_at"));
-                index(warp);
+        applyLoaded(readAll());
+    }
+
+    /** 异步从数据库重载全部玩家地标到内存（用于跨服变更后刷新本地缓存）。 */
+    public void reload() {
+        databaseExecutor.execute(() -> {
+            Loaded loaded;
+            try {
+                loaded = readAll();
+            } catch (SQLException e) {
+                plugin.getLogger().warning("刷新玩家地标缓存失败: " + e.getMessage());
+                return;
             }
-        }
+            Bukkit.getScheduler().runTask(plugin, () -> applyLoaded(loaded));
+        });
+    }
+
+    /** 读取全表到局部映射，不触碰共享缓存，供主线程安全应用。 */
+    private Loaded readAll() throws SQLException {
+        return connections.execute(connection -> {
+            Map<UUID, PlayerWarp> loadedWarps = new HashMap<>();
+            Map<String, UUID> loadedNames = new HashMap<>();
+            Map<UUID, ConcurrentMap<String, UUID>> loadedOwners = new HashMap<>();
+            try (var statement = connection.createStatement();
+                 var rs = statement.executeQuery(
+                           "SELECT id, owner_id, owner_name, name, server, world, x, y, z, yaw, pitch, " +
+                                   "description, icon_material, icon_custom_data, icon_item_model, cost, " +
+                                   "cooldown_seconds, created_at FROM player_warp")) {
+                while (rs.next()) {
+                    PlayerWarp warp = new PlayerWarp(
+                            UUID.fromString(rs.getString("id")),
+                            UUID.fromString(rs.getString("owner_id")),
+                            rs.getString("owner_name"),
+                            rs.getString("name"),
+                            rs.getString("server"),
+                            rs.getString("world"),
+                            rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+                            rs.getFloat("yaw"), rs.getFloat("pitch"),
+                            rs.getString("description"),
+                            rs.getString("icon_material"),
+                            rs.getObject("icon_custom_data") == null ? null : rs.getInt("icon_custom_data"),
+                            rs.getString("icon_item_model"),
+                            rs.getDouble("cost"),
+                            rs.getInt("cooldown_seconds"),
+                            rs.getLong("created_at"));
+                    loadedWarps.put(warp.id(), warp);
+                    loadedNames.put(warp.name().toLowerCase(Locale.ROOT), warp.id());
+                    loadedOwners.computeIfAbsent(warp.ownerId(), k -> new ConcurrentHashMap<>())
+                            .put(warp.name().toLowerCase(Locale.ROOT), warp.id());
+                }
+            }
+            return new Loaded(loadedWarps, loadedNames, loadedOwners);
+        });
+    }
+
+    /** 用最新快照合并共享缓存：先补入新值再移除已删除项，避免读取方看到空列表。 */
+    private void applyLoaded(Loaded loaded) {
+        warps.putAll(loaded.warps());
+        warps.keySet().retainAll(loaded.warps().keySet());
+        nameIndex.putAll(loaded.names());
+        nameIndex.keySet().retainAll(loaded.names().keySet());
+        ownerIndex.putAll(loaded.owners());
+        ownerIndex.keySet().retainAll(loaded.owners().keySet());
+    }
+
+    /** 一次全量读取的结果快照。 */
+    private record Loaded(Map<UUID, PlayerWarp> warps, Map<String, UUID> names,
+                          Map<UUID, ConcurrentMap<String, UUID>> owners) {
     }
 
     /** 把地标写入内存索引。 */
@@ -138,7 +184,7 @@ public final class PlayerWarpStore {
     /** 创建或更新玩家地标，并异步持久化。 */
     public void save(PlayerWarp warp) {
         index(warp);
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO player_warp(id, owner_id, owner_name, name, server, world, x, y, z, yaw, pitch,
                         description, icon_material, icon_custom_data, icon_item_model, cost, cooldown_seconds, created_at)
@@ -164,22 +210,23 @@ public final class PlayerWarpStore {
                 stmt.setString(3, warp.ownerName() == null ? "" : warp.ownerName());
                 stmt.setString(4, warp.name());
                 stmt.setString(5, warp.server());
-                stmt.setDouble(6, warp.x());
-                stmt.setDouble(7, warp.y());
-                stmt.setDouble(8, warp.z());
-                stmt.setFloat(9, warp.yaw());
-                stmt.setFloat(10, warp.pitch());
-                stmt.setString(11, warp.description() == null ? "" : warp.description());
-                stmt.setString(12, warp.iconMaterial() == null ? "" : warp.iconMaterial());
+                stmt.setString(6, warp.world());
+                stmt.setDouble(7, warp.x());
+                stmt.setDouble(8, warp.y());
+                stmt.setDouble(9, warp.z());
+                stmt.setFloat(10, warp.yaw());
+                stmt.setFloat(11, warp.pitch());
+                stmt.setString(12, warp.description() == null ? "" : warp.description());
+                stmt.setString(13, warp.iconMaterial() == null ? "" : warp.iconMaterial());
                 if (warp.iconCustomData() == null) {
-                    stmt.setNull(13, Types.INTEGER);
+                    stmt.setNull(14, Types.INTEGER);
                 } else {
-                    stmt.setInt(13, warp.iconCustomData());
+                    stmt.setInt(14, warp.iconCustomData());
                 }
-                stmt.setString(14, warp.iconItemModel() == null ? "" : warp.iconItemModel());
-                stmt.setDouble(15, warp.cost());
-                stmt.setInt(16, warp.cooldownSeconds());
-                stmt.setLong(17, warp.createdAt());
+                stmt.setString(15, warp.iconItemModel() == null ? "" : warp.iconItemModel());
+                stmt.setDouble(16, warp.cost());
+                stmt.setInt(17, warp.cooldownSeconds());
+                stmt.setLong(18, warp.createdAt());
                 stmt.executeUpdate();
             }
         });
@@ -196,7 +243,7 @@ public final class PlayerWarpStore {
                 owned.remove(name.toLowerCase(Locale.ROOT));
             }
         }
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             try (PreparedStatement stmt = connection.prepareStatement(
                     "DELETE FROM player_warp WHERE owner_id=? AND name=?")) {
                 stmt.setString(1, ownerId.toString());
@@ -262,7 +309,7 @@ public final class PlayerWarpStore {
         return all().stream().map(PlayerWarp::name).toList();
     }
 
-    /** 等待异步写入完成。连接由 SettingsStore 管理。 */
+    /** 等待异步写入完成。物理连接由 SettingsStore 管理。 */
     public void close() {
         databaseExecutor.shutdown();
         try {
@@ -275,13 +322,17 @@ public final class PlayerWarpStore {
         }
     }
 
-    /** 将数据库写操作放入单线程队列并统一记录异常。 */
+    /** 将数据库写操作放入单线程队列并统一记录异常；写入成功后广播变更通知其他子服刷新。 */
     private void executeUpdate(SqlOperation operation) {
         databaseExecutor.execute(() -> {
             try {
-                operation.run();
+                connections.executeVoid(operation::run);
             } catch (SQLException e) {
                 plugin.getLogger().severe("保存玩家地标失败: " + e.getMessage());
+                return;
+            }
+            if (plugin.network() != null) {
+                plugin.network().notifyDataChanged(SYNC_TOPIC);
             }
         });
     }
@@ -290,6 +341,6 @@ public final class PlayerWarpStore {
     @FunctionalInterface
     private interface SqlOperation {
         /** 执行具体 SQL 写入。 */
-        void run() throws SQLException;
+        void run(Connection connection) throws SQLException;
     }
 }

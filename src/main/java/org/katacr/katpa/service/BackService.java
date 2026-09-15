@@ -103,14 +103,14 @@ public final class BackService {
 
     /** 同服直接传送。 */
     private void teleportLocal(Player player, LocationRecord record) {
+        if (!plugin.teleports().ensureTargetAvailable(player, record.server(), record.world(),
+                "back-world-unloaded", java.util.Map.of())) {
+            return;
+        }
         Location target = new Location(
                 Bukkit.getWorld(record.world()),
                 record.x(), record.y(), record.z(),
                 record.yaw(), record.pitch());
-        if (target.getWorld() == null) {
-            plugin.messages().send(player, "back-world-unloaded");
-            return;
-        }
         recordLocation(player);
         plugin.teleports().beginDirect(player, "back", () -> {
             markOwnTeleport(player.getUniqueId());
@@ -128,6 +128,9 @@ public final class BackService {
 
     /** 跨服返回：先记录当前位置，完成源服吟唱后请求代理切服并在目标服落点。 */
     private void teleportCrossServer(Player player, LocationRecord record) {
+        if (!plugin.teleports().ensureTargetAvailable(player, record.server(), null, null, null)) {
+            return;
+        }
         recordLocation(player);
         pendingBack.put(player.getUniqueId(), true);
         plugin.teleports().beginDirect(player, "back", () -> {

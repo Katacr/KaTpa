@@ -77,7 +77,10 @@ public final class DbackService {
             plugin.messages().send(player, "proxy-unavailable");
             return;
         }
-        // 跨服：先在本服完成吟唱，再请求代理切服（与 /back 行为对齐）
+        // 跨服：先校验目标子服可用，再在本服完成吟唱后请求代理切服（与 /back 行为对齐）
+        if (!plugin.teleports().ensureTargetAvailable(player, record.server(), null, null, null)) {
+            return;
+        }
         plugin.back().recordLocation(player);
         pendingDback.put(player.getUniqueId(), true);
         plugin.teleports().beginDirect(player, "dback", () -> {
@@ -96,14 +99,14 @@ public final class DbackService {
 
     /** 同服直接传送。 */
     private void teleportLocal(Player player, LocationRecord record) {
+        if (!plugin.teleports().ensureTargetAvailable(player, record.server(), record.world(),
+                "back-world-unloaded", Map.of())) {
+            return;
+        }
         Location target = new Location(
                 Bukkit.getWorld(record.world()),
                 record.x(), record.y(), record.z(),
                 record.yaw(), record.pitch());
-        if (target.getWorld() == null) {
-            plugin.messages().send(player, "back-world-unloaded");
-            return;
-        }
         plugin.back().recordLocation(player);
         plugin.teleports().beginDirect(player, "dback", () -> {
             plugin.back().markOwnTeleport(player.getUniqueId());

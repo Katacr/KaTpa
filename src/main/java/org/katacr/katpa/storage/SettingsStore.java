@@ -36,7 +36,7 @@ public final class SettingsStore {
         thread.setDaemon(true);
         return thread;
     });
-    private Connection connection;
+    private JdbcConnectionManager connections;
     private boolean mysql;
 
     /** 创建绑定插件实例的数据存储。 */
@@ -56,17 +56,29 @@ public final class SettingsStore {
             boolean useSsl = plugin.getConfig().getBoolean("storage.mysql.use-ssl", false);
             String url = "jdbc:mariadb://" + host + ":" + port + "/" + database
                     + "?useSsl=" + useSsl + "&connectTimeout=5000&socketTimeout=10000";
-            connection = DriverManager.getConnection(url,
-                    plugin.getConfig().getString("storage.mysql.username", "katpa"),
-                    plugin.getConfig().getString("storage.mysql.password", "change-me"));
+            String username = plugin.getConfig().getString("storage.mysql.username", "katpa");
+            String password = plugin.getConfig().getString("storage.mysql.password", "change-me");
+            connections = new JdbcConnectionManager(
+                    () -> DriverManager.getConnection(url, username, password),
+                    connection -> { }, plugin.getLogger(), true);
         } else {
             File databaseFile = new File(plugin.getDataFolder(), "players.db");
             Class.forName("org.sqlite.JDBC");
-            connection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getAbsolutePath());
+            String url = "jdbc:sqlite:" + databaseFile.getAbsolutePath();
+            connections = new JdbcConnectionManager(
+                    () -> DriverManager.getConnection(url),
+                    connection -> {
+                        try (Statement statement = connection.createStatement()) {
+                            statement.execute("PRAGMA journal_mode=DELETE");
+                            statement.execute("PRAGMA busy_timeout=5000");
+                            statement.execute("PRAGMA foreign_keys=ON");
+                        }
+                    }, plugin.getLogger(), false);
         }
-        try (Statement statement = connection.createStatement()) {
-            if (mysql) {
-                statement.executeUpdate("""
+        connections.executeVoid(connection -> {
+            try (Statement statement = connection.createStatement()) {
+                if (mysql) {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS players (
                             uuid VARCHAR(36) PRIMARY KEY,
                             last_name VARCHAR(64) NOT NULL,
@@ -74,7 +86,7 @@ public final class SettingsStore {
                             updated_at BIGINT NOT NULL
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-                statement.executeUpdate("""
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS relations (
                             owner_uuid VARCHAR(36) NOT NULL,
                             target_uuid VARCHAR(36) NOT NULL,
@@ -83,11 +95,8 @@ public final class SettingsStore {
                             PRIMARY KEY (owner_uuid, target_uuid)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-            } else {
-                statement.execute("PRAGMA journal_mode=DELETE");
-                statement.execute("PRAGMA busy_timeout=5000");
-                statement.execute("PRAGMA foreign_keys=ON");
-                statement.executeUpdate("""
+                } else {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS players (
                             uuid TEXT PRIMARY KEY,
                             last_name TEXT NOT NULL,
@@ -95,7 +104,7 @@ public final class SettingsStore {
                             updated_at INTEGER NOT NULL
                         )
                         """);
-                statement.executeUpdate("""
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS relations (
                             owner_uuid TEXT NOT NULL,
                             target_uuid TEXT NOT NULL,
@@ -104,8 +113,9 @@ public final class SettingsStore {
                             PRIMARY KEY (owner_uuid, target_uuid)
                         )
                         """);
+                }
             }
-        }
+        });
         loadCache();
     }
 
@@ -114,7 +124,7 @@ public final class SettingsStore {
         KnownPlayer knownPlayer = new KnownPlayer(player.getUniqueId(), player.getName());
         knownPlayers.put(player.getUniqueId(), knownPlayer);
         modes.putIfAbsent(player.getUniqueId(), AcceptMode.DIALOG);
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO players(uuid, last_name, accept_mode, updated_at) VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE last_name=VALUES(last_name), updated_at=VALUES(updated_at)
@@ -130,7 +140,7 @@ public final class SettingsStore {
                 statement.executeUpdate();
             }
             if (mysql) {
-                refreshPlayer(player.getUniqueId());
+                refreshPlayer(connection, player.getUniqueId());
             }
         });
     }
@@ -144,7 +154,7 @@ public final class SettingsStore {
     public void setMode(Player player, AcceptMode mode) {
         rememberPlayer(player);
         modes.put(player.getUniqueId(), mode);
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             try (PreparedStatement statement = connection.prepareStatement(
                     "UPDATE players SET accept_mode=?, updated_at=? WHERE uuid=?")) {
                 statement.setString(1, mode.name());
@@ -166,7 +176,7 @@ public final class SettingsStore {
     public void setRelation(UUID ownerId, KnownPlayer target, ListType type) {
         relations.computeIfAbsent(ownerId, ignored -> new ConcurrentHashMap<>())
                 .put(target.uuid(), new RelationEntry(target.uuid(), target.name(), type));
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO relations(owner_uuid, target_uuid, target_name, list_type) VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE target_name=VALUES(target_name), list_type=VALUES(list_type)
@@ -191,7 +201,7 @@ public final class SettingsStore {
         if (ownerRelations != null) {
             ownerRelations.computeIfPresent(targetId, (ignored, entry) -> entry.type() == type ? null : entry);
         }
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             try (PreparedStatement statement = connection.prepareStatement(
                     "DELETE FROM relations WHERE owner_uuid=? AND target_uuid=? AND list_type=?")) {
                 statement.setString(1, ownerId.toString());
@@ -232,9 +242,9 @@ public final class SettingsStore {
         return player != null ? player.name() : null;
     }
 
-    /** 返回当前数据库连接，供共享存储使用。 */
-    public Connection connection() {
-        return connection;
+    /** 返回共享数据库连接管理器，供其他存储执行受保护的 JDBC 操作。 */
+    public JdbcConnectionManager connections() {
+        return connections;
     }
 
     /** 返回是否使用 MySQL。 */
@@ -242,7 +252,7 @@ public final class SettingsStore {
         return mysql;
     }
 
-    /** 等待异步写入完成并关闭数据库连接。 */
+    /** 等待异步写入完成并关闭数据库连接管理器。 */
     public void close() {
         databaseExecutor.shutdown();
         try {
@@ -250,51 +260,56 @@ public final class SettingsStore {
                 plugin.getLogger().warning("等待数据库任务结束超时。未完成任务将被放弃。");
                 databaseExecutor.shutdownNow();
             }
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-            }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             databaseExecutor.shutdownNow();
-        } catch (SQLException exception) {
-            plugin.getLogger().severe("关闭数据库失败: " + exception.getMessage());
+        } finally {
+            if (connections != null) {
+                try {
+                    connections.close();
+                } catch (SQLException exception) {
+                    plugin.getLogger().severe("关闭数据库失败: " + exception.getMessage());
+                }
+            }
         }
     }
 
     /** 从数据库表中重建内存缓存。 */
     private void loadCache() throws SQLException {
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery("SELECT uuid, last_name, accept_mode FROM players")) {
-            while (result.next()) {
-                UUID playerId = UUID.fromString(result.getString("uuid"));
-                String name = result.getString("last_name");
-                knownPlayers.put(playerId, new KnownPlayer(playerId, name));
-                try {
-                    modes.put(playerId, AcceptMode.valueOf(result.getString("accept_mode")));
-                } catch (IllegalArgumentException ignored) {
-                    modes.put(playerId, AcceptMode.DIALOG);
+        connections.executeVoid(connection -> {
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery("SELECT uuid, last_name, accept_mode FROM players")) {
+                while (result.next()) {
+                    UUID playerId = UUID.fromString(result.getString("uuid"));
+                    String name = result.getString("last_name");
+                    knownPlayers.put(playerId, new KnownPlayer(playerId, name));
+                    try {
+                        modes.put(playerId, AcceptMode.valueOf(result.getString("accept_mode")));
+                    } catch (IllegalArgumentException ignored) {
+                        modes.put(playerId, AcceptMode.DIALOG);
+                    }
                 }
             }
-        }
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery(
-                     "SELECT owner_uuid, target_uuid, target_name, list_type FROM relations")) {
-            while (result.next()) {
-                UUID ownerId = UUID.fromString(result.getString("owner_uuid"));
-                UUID targetId = UUID.fromString(result.getString("target_uuid"));
-                try {
-                    ListType type = ListType.valueOf(result.getString("list_type"));
-                    relations.computeIfAbsent(ownerId, ignored -> new ConcurrentHashMap<>())
-                            .put(targetId, new RelationEntry(targetId, result.getString("target_name"), type));
-                } catch (IllegalArgumentException ignored) {
-                    plugin.getLogger().warning("忽略无法识别的名单类型: " + result.getString("list_type"));
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery(
+                         "SELECT owner_uuid, target_uuid, target_name, list_type FROM relations")) {
+                while (result.next()) {
+                    UUID ownerId = UUID.fromString(result.getString("owner_uuid"));
+                    UUID targetId = UUID.fromString(result.getString("target_uuid"));
+                    try {
+                        ListType type = ListType.valueOf(result.getString("list_type"));
+                        relations.computeIfAbsent(ownerId, ignored -> new ConcurrentHashMap<>())
+                                .put(targetId, new RelationEntry(targetId, result.getString("target_name"), type));
+                    } catch (IllegalArgumentException ignored) {
+                        plugin.getLogger().warning("忽略无法识别的名单类型: " + result.getString("list_type"));
+                    }
                 }
             }
-        }
+        });
     }
 
     /** 玩家进入新子服时从共享 MySQL 刷新其接受模式和关系名单。 */
-    private void refreshPlayer(UUID playerId) throws SQLException {
+    private void refreshPlayer(Connection connection, UUID playerId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT last_name, accept_mode FROM players WHERE uuid=?")) {
             statement.setString(1, playerId.toString());
@@ -337,7 +352,7 @@ public final class SettingsStore {
     private void executeUpdate(SqlOperation operation) {
         databaseExecutor.execute(() -> {
             try {
-                operation.run();
+                connections.executeVoid(operation::run);
             } catch (SQLException exception) {
                 plugin.getLogger().severe("保存玩家设置失败: " + exception.getMessage());
             }
@@ -348,6 +363,6 @@ public final class SettingsStore {
     @FunctionalInterface
     private interface SqlOperation {
         /** 执行具体 SQL 写入。 */
-        void run() throws SQLException;
+        void run(Connection connection) throws SQLException;
     }
 }

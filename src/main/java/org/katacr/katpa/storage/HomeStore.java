@@ -28,7 +28,7 @@ public final class HomeStore {
         thread.setDaemon(true);
         return thread;
     });
-    private Connection connection;
+    private JdbcConnectionManager connections;
     private boolean mysql;
 
     /** 创建绑定插件实例的家位置存储。 */
@@ -36,13 +36,14 @@ public final class HomeStore {
         this.plugin = plugin;
     }
 
-    /** 使用共享数据库连接初始化表结构。 */
-    public void initialize(Connection sharedConnection, boolean mysql) throws SQLException {
-        this.connection = sharedConnection;
+    /** 使用共享连接管理器初始化表结构。 */
+    public void initialize(JdbcConnectionManager connections, boolean mysql) throws SQLException {
+        this.connections = connections;
         this.mysql = mysql;
-        try (var statement = connection.createStatement()) {
-            if (mysql) {
-                statement.executeUpdate("""
+        connections.executeVoid(connection -> {
+            try (var statement = connection.createStatement()) {
+                if (mysql) {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS home (
                             id VARCHAR(36) PRIMARY KEY,
                             owner_id VARCHAR(36) NOT NULL,
@@ -61,8 +62,8 @@ public final class HomeStore {
                             created_at BIGINT NOT NULL
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
-            } else {
-                statement.executeUpdate("""
+                } else {
+                    statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS home (
                             id TEXT PRIMARY KEY,
                             owner_id TEXT NOT NULL,
@@ -81,38 +82,41 @@ public final class HomeStore {
                             created_at INTEGER NOT NULL
                         )
                         """);
+                }
             }
-        }
+        });
     }
 
     /** 从数据库加载指定玩家的全部家到内存。 */
     public void load(UUID ownerId) throws SQLException {
-        var loaded = new ConcurrentHashMap<String, Home>();
-        var index = new ConcurrentHashMap<String, UUID>();
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "SELECT id, name, server, world, x, y, z, yaw, pitch, description, " +
-                        "icon_material, icon_custom_data, icon_item_model, created_at FROM home WHERE owner_id=?")) {
-            stmt.setString(1, ownerId.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Home home = new Home(
-                            UUID.fromString(rs.getString("id")),
-                            ownerId, rs.getString("name"),
-                            rs.getString("server"), rs.getString("world"),
-                            rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
-                            rs.getFloat("yaw"), rs.getFloat("pitch"),
-                            rs.getString("description"),
-                            rs.getString("icon_material"),
-                            rs.getObject("icon_custom_data") == null ? null : rs.getInt("icon_custom_data"),
-                            rs.getString("icon_item_model"),
-                            rs.getLong("created_at"));
-                    loaded.put(home.name().toLowerCase(Locale.ROOT), home);
-                    index.put(home.name().toLowerCase(Locale.ROOT), home.id());
+        connections.executeVoid(connection -> {
+            var loaded = new ConcurrentHashMap<String, Home>();
+            var index = new ConcurrentHashMap<String, UUID>();
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, name, server, world, x, y, z, yaw, pitch, description, " +
+                            "icon_material, icon_custom_data, icon_item_model, created_at FROM home WHERE owner_id=?")) {
+                stmt.setString(1, ownerId.toString());
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        Home home = new Home(
+                                UUID.fromString(rs.getString("id")),
+                                ownerId, rs.getString("name"),
+                                rs.getString("server"), rs.getString("world"),
+                                rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+                                rs.getFloat("yaw"), rs.getFloat("pitch"),
+                                rs.getString("description"),
+                                rs.getString("icon_material"),
+                                rs.getObject("icon_custom_data") == null ? null : rs.getInt("icon_custom_data"),
+                                rs.getString("icon_item_model"),
+                                rs.getLong("created_at"));
+                        loaded.put(home.name().toLowerCase(Locale.ROOT), home);
+                        index.put(home.name().toLowerCase(Locale.ROOT), home.id());
+                    }
                 }
             }
-        }
-        homes.put(ownerId, loaded);
-        nameIndex.put(ownerId, index);
+            homes.put(ownerId, loaded);
+            nameIndex.put(ownerId, index);
+        });
     }
 
     /** 保存或更新玩家的家，并异步持久化。 */
@@ -121,7 +125,7 @@ public final class HomeStore {
                 .put(home.name().toLowerCase(Locale.ROOT), home);
         nameIndex.computeIfAbsent(home.ownerId(), k -> new ConcurrentHashMap<>())
                 .put(home.name().toLowerCase(Locale.ROOT), home.id());
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             String sql = mysql ? """
                     INSERT INTO home(id, owner_id, name, server, world, x, y, z, yaw, pitch, description,
                         icon_material, icon_custom_data, icon_item_model, created_at)
@@ -174,7 +178,7 @@ public final class HomeStore {
                 index.remove(name.toLowerCase(Locale.ROOT));
             }
         }
-        executeUpdate(() -> {
+        executeUpdate(connection -> {
             try (PreparedStatement stmt = connection.prepareStatement(
                     "DELETE FROM home WHERE owner_id=? AND name=?")) {
                 stmt.setString(1, ownerId.toString());
@@ -210,7 +214,7 @@ public final class HomeStore {
         return playerHomes == null ? 0 : playerHomes.size();
     }
 
-    /** 等待异步写入完成。连接由 SettingsStore 管理。 */
+    /** 等待异步写入完成。物理连接由 SettingsStore 管理。 */
     public void close() {
         databaseExecutor.shutdown();
         try {
@@ -227,7 +231,7 @@ public final class HomeStore {
     private void executeUpdate(SqlOperation operation) {
         databaseExecutor.execute(() -> {
             try {
-                operation.run();
+                connections.executeVoid(operation::run);
             } catch (SQLException e) {
                 plugin.getLogger().severe("保存家位置失败: " + e.getMessage());
             }
@@ -237,6 +241,6 @@ public final class HomeStore {
     /** 表示一个可能抛出 SQL 异常的数据库写操作。 */
     @FunctionalInterface
     private interface SqlOperation {
-        void run() throws SQLException;
+        void run(Connection connection) throws SQLException;
     }
 }

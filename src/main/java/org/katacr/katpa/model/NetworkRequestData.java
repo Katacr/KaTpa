@@ -29,4 +29,9 @@ public record NetworkRequestData(
     public String destinationName() {
         return type == RequestType.TPA ? receiverName : senderName;
     }
+
+    /** 返回传送目的地玩家所在子服名称。 */
+    public String destinationServer() {
+        return type == RequestType.TPA ? receiverServer : senderServer;
+    }
 }

@@ -13,13 +13,16 @@ import org.katacr.katpa.model.RequestType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -27,9 +30,11 @@ import java.util.function.Consumer;
 public final class CrossServerService implements PluginMessageListener {
     private final KaTpaPlugin plugin;
     private final Map<UUID, NetworkPlayer> onlinePlayers = new LinkedHashMap<>();
+    private final Set<String> servers = new LinkedHashSet<>();
     private volatile String realServerId;
     private volatile boolean available;
     private volatile long lastPresenceAt;
+    private volatile long lastCacheRefreshAt;
     private boolean registered;
     private BukkitTask heartbeatTask;
 
@@ -61,6 +66,7 @@ public final class CrossServerService implements PluginMessageListener {
             registered = false;
         }
         onlinePlayers.clear();
+        servers.clear();
         available = false;
         realServerId = null;
         lastPresenceAt = 0L;
@@ -88,7 +94,25 @@ public final class CrossServerService implements PluginMessageListener {
         return enabled() && available && System.currentTimeMillis() - lastPresenceAt <= 90_000L;
     }
 
-    /** 玩家进入子服后下一刻向代理请求最新全服在线列表。 */
+    /**
+     * 判断目标子服当前是否可用。
+     *
+     * 未启用跨服或目标即本服时恒为可用；代理已推送服务器列表时按列表判定；
+     * 列表为空（旧版代理或尚未收到快照）时退化为仅要求代理连通。
+     */
+    public boolean isServerAvailable(String serverName) {
+        if (!enabled() || serverName == null || serverName.isBlank() || serverName.equals(serverId())) {
+            return true;
+        }
+        synchronized (servers) {
+            if (servers.isEmpty()) {
+                return available();
+            }
+            return servers.contains(serverName);
+        }
+    }
+
+    /** 玩家进入子服后下一刻向代理请求最新全服在线列表，并按需刷新跨服共享缓存。 */
     public void handleJoin(Player player) {
         if (enabled()) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -96,6 +120,37 @@ public final class CrossServerService implements PluginMessageListener {
                     requestSync(player);
                 }
             }, 1L);
+            refreshGlobalCaches();
+        }
+    }
+
+    /**
+     * 通知代理把数据变更广播给其他后端，触发它们重载对应缓存。
+     *
+     * 主题为 {@code warp}、{@code player_warp}；本服缓存已同步更新，因此无需自处理。
+     */
+    public void notifyDataChanged(String topic) {
+        if (!enabled() || topic == null || topic.isBlank()) {
+            return;
+        }
+        Bukkit.getScheduler().runTask(plugin, () ->
+                plugin.getServer().getOnlinePlayers().stream().findFirst()
+                        .ifPresent(carrier -> send(carrier, "core", "data_changed",
+                                output -> output.writeUTF(topic))));
+    }
+
+    /** 玩家加入时从数据库刷新跨服共享缓存，兜底补上离线期间错过的广播（带 2 秒去抖）。 */
+    private void refreshGlobalCaches() {
+        long now = System.currentTimeMillis();
+        if (now - lastCacheRefreshAt < 2_000L) {
+            return;
+        }
+        lastCacheRefreshAt = now;
+        if (plugin.warpStore() != null) {
+            plugin.warpStore().reload();
+        }
+        if (plugin.playerWarpStore() != null) {
+            plugin.playerWarpStore().reload();
         }
     }
 
@@ -221,8 +276,12 @@ public final class CrossServerService implements PluginMessageListener {
             KaProxyProtocol.Packet packet = KaProxyProtocol.decode(message);
             available = true;
             lastPresenceAt = System.currentTimeMillis();
-            if ("core".equals(packet.module()) && "presence".equals(packet.action())) {
-                readPresence(packet.input());
+            if ("core".equals(packet.module())) {
+                if ("presence".equals(packet.action())) {
+                    readPresence(packet.input());
+                } else if ("data_changed".equals(packet.action())) {
+                    handleDataChanged(packet.input());
+                }
                 return;
             }
             if ("back".equals(packet.module())) {
@@ -258,12 +317,58 @@ public final class CrossServerService implements PluginMessageListener {
             UUID id = KaProxyProtocol.readUuid(input);
             snapshot.put(id, new NetworkPlayer(id, input.readUTF(), input.readUTF()));
         }
+        Set<String> serverSnapshot = readServerList(input);
         synchronized (onlinePlayers) {
             onlinePlayers.clear();
             onlinePlayers.putAll(snapshot);
         }
+        if (serverSnapshot != null) {
+            synchronized (servers) {
+                servers.clear();
+                servers.addAll(serverSnapshot);
+            }
+        }
         available = true;
         lastPresenceAt = System.currentTimeMillis();
+    }
+
+    /** 读取 presence 尾部的服务器列表；旧版代理无此字段时返回 null 表示未知。 */
+    private Set<String> readServerList(DataInputStream input) throws IOException {
+        try {
+            int serverCount = input.readInt();
+            if (serverCount < 0 || serverCount > 100_000) {
+                throw new IOException("服务器数量无效: " + serverCount);
+            }
+            Set<String> serverSnapshot = new LinkedHashSet<>();
+            for (int index = 0; index < serverCount; index++) {
+                String name = input.readUTF();
+                if (!name.isBlank()) {
+                    serverSnapshot.add(name);
+                }
+            }
+            return serverSnapshot;
+        } catch (EOFException ignored) {
+            return null;
+        }
+    }
+
+    /** 收到代理转发的数据变更通知后，重载对应跨服共享缓存。 */
+    private void handleDataChanged(DataInputStream input) throws IOException {
+        input.readUTF();
+        String topic = input.readUTF();
+        switch (topic) {
+            case "warp" -> {
+                if (plugin.warpStore() != null) {
+                    plugin.warpStore().reload();
+                }
+            }
+            case "player_warp" -> {
+                if (plugin.playerWarpStore() != null) {
+                    plugin.playerWarpStore().reload();
+                }
+            }
+            default -> plugin.getLogger().fine("忽略未知数据同步主题: " + topic);
+        }
     }
 
     /** 路由 KaTpa 模块动作。 */

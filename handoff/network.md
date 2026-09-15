@@ -1,6 +1,6 @@
 # 跨服网络层（network）
 
-> 最后更新：2026-09-07
+> 最后更新：2026-09-15（新增 `core/data_changed` 缓存同步广播）
 
 ## 现状
 
@@ -11,8 +11,10 @@
 ## 协议要点
 
 - **在线玩家发现**：后端每 30s 发 `sync_request` 心跳拉取 presence 快照，更新 `onlinePlayers` 与 `realServerId`；`available()` 要求 90s 内收到过 presence。
+- **在线子服列表（2026-09-12 新增）**：presence 包在玩家列表后追加 `int serverCount + serverName(UTF)*`，由 KaProxy 侧 ping 探活后仅下发在线子服。后端 `CrossServerService` 解析到 `servers` 集合，`isServerAvailable(name)` 供吟唱前校验；旧版代理无该字段时 `readServerList` 捕获 `EOFException` 返回 null，退化为“仅要求代理连通”。
 - **tpa 事务**：`request_create/accept/deny/cancel/warmup_*/arrival_*`。
 - **back 事务**：`back_request/back_arrival_complete/failed`。
+- **数据变更同步（2026-09-15 新增）**：后端写入 warp/player_warp 成功后发 `core/data_changed`（payload：`topic` UTF，白名单 warp/player_warp），KaProxy `KaProxyCore.handleDataChanged` 转发给除来源外的所有后端（payload：`sourceServer` UTF + `topic` UTF）；后端收到后 `WarpStore.reload()` / `PlayerWarpStore.reload()`。`CrossServerService.notifyDataChanged(topic)` 负责在写成功后从 DB 线程调度到主线程发送（需 `available()`）。玩家加入时 `refreshGlobalCaches()`（2s 去抖）兜底重载，覆盖该服离线期间错过的广播。
 - 未连接代理（`!available()`）且非 sync 的消息直接返回 false。
 
 ## 跨服传送流程

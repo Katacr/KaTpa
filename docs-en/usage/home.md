@@ -11,10 +11,18 @@ Each player can set their own home locations and teleport to them using `/home`.
 
 Without a name, opens a home selection dialog listing all available homes. With a name, teleports directly to the specified home.
 
-Each home can have a description and icon configured (via the home management GUI):
+Right-clicking a home in the list opens that home's editor, where you can change its icon, update its location, or delete it (see "Home Editor" below). Each home can have a description and icon configured (via the home management GUI):
 
 * **Description**: Explanatory text shown in the home list
 * **Icon**: Item shown in the list and editor (supports material, `custom_model_data`, and 1.21.4+ `item_model`)
+
+## Home Editor
+
+Right-clicking a home in the home list (`/home` or the `/sethome` management dialog) opens the home editor with three functions:
+
+* **Icon**: Hold any item in your hand and click the "Icon" button to set it as the home icon.
+* **Update location**: Updates the home location to the player's current position (keeps description and icon).
+* **Delete**: Deletes this home.
 
 ## /sethome — Create or Manage Homes
 
@@ -23,7 +31,7 @@ Each home can have a description and icon configured (via the home management GU
 /sethome <name>
 ```
 
-Without a name, opens the home management dialog where players can view all homes, delete homes, or create new ones. With a name, creates or updates a home at the current location.
+Without a name, opens the home management dialog where players can view all homes, delete homes, or create new ones. With a name, creates or updates a home at the current location. Right-clicking a home in the list also opens the home editor.
 
 ## /delhome — Delete a Home
 

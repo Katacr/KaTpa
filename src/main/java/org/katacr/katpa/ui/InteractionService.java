@@ -124,6 +124,11 @@ public final class InteractionService {
         platform.showHomeManager(player);
     }
 
+    /** 显示单个家的编辑界面（图标 / 更新位置 / 删除）。 */
+    public void showHomeEditor(Player player, org.katacr.katpa.model.Home home) {
+        platform.showHomeEditor(player, home);
+    }
+
     /** 在插件关闭时释放平台适配器状态。 */
     public void shutdown() {
         platform.shutdown();

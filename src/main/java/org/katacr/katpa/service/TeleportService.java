@@ -59,6 +59,42 @@ public final class TeleportService {
         return false;
     }
 
+    /**
+     * 吟唱或切服前校验目标是否可用。
+     *
+     * 跨服时要求代理连通且目标子服在代理服务器列表中；同服时要求目标世界已加载。
+     * 失败时发送提示并返回 {@code false}，调用方应据此取消传送（不启动吟唱）。
+     *
+     * @param worldMessageKey  同服世界未加载时的模块化提示键，为 null 时用通用键
+     * @param worldMessageArgs 模块化提示键的占位符参数
+     */
+    public boolean ensureTargetAvailable(Player traveler, String targetServer, String targetWorld,
+                                         String worldMessageKey, Map<String, String> worldMessageArgs) {
+        boolean crossServer = targetServer != null && !targetServer.isBlank()
+                && plugin.network().enabled() && !targetServer.equals(plugin.network().serverId());
+        if (crossServer) {
+            if (!plugin.network().available()) {
+                plugin.messages().send(traveler, "proxy-unavailable");
+                return false;
+            }
+            if (!plugin.network().isServerAvailable(targetServer)) {
+                plugin.messages().send(traveler, "target-server-unavailable", Map.of("server", targetServer));
+                return false;
+            }
+            return true;
+        }
+        if (targetWorld != null && Bukkit.getWorld(targetWorld) == null) {
+            if (worldMessageKey != null) {
+                plugin.messages().send(traveler, worldMessageKey,
+                        worldMessageArgs == null ? Map.of() : worldMessageArgs);
+            } else {
+                plugin.messages().send(traveler, "target-world-unloaded", Map.of("world", targetWorld));
+            }
+            return false;
+        }
+        return true;
+    }
+
     /** 根据已接受请求启动实际旅行者的吟唱倒计时。 */
     public boolean begin(TeleportRequest request) {
         Player traveler = Bukkit.getPlayer(request.travelerId());
@@ -123,6 +159,9 @@ public final class TeleportService {
             return false;
         }
         if (!canUseNetworkEndpoint(traveler, true)) {
+            return false;
+        }
+        if (!ensureTargetAvailable(traveler, request.destinationServer(), null, null, null)) {
             return false;
         }
         int warmupSeconds = warmupSeconds("tpa");

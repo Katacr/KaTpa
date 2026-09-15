@@ -50,9 +50,28 @@ In cross-server mode, the real server ID of each backend is obtained automatical
 
 ## Player Experience
 
-Once enabled, the `/tpa` and `/tpahere` player dialogs contain players from the entire network. `/back` and `/dback` can also return across servers, and `/warp` and `/home` support cross-server teleportation too—the proxy switches the player to the target backend and teleports them to the exact coordinates. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers.
+Once enabled, the `/tpa` and `/tpahere` player dialogs contain players from the entire network. `/back` and `/dback` can also return across servers, and `/warp` and `/home` support cross-server teleportation too—the proxy switches the player to the target backend and teleports them to the exact coordinates. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers. Cross-server teleports behave like local ones: the warm-up countdown (`modules.<module>.warmup-seconds`, 3 by default) always completes before the backend switch, and moving, taking damage, or disconnecting cancels it.
 
 By default, if the target player changes backend during the warm-up, KaProxy follows their current server.
+
+## Target Availability Check
+
+Before any warm-up countdown starts, the destination is validated. If it is not reachable, the teleport is cancelled immediately with a message and no countdown runs:
+
+* If the destination is on the current backend, the target world must be loaded; otherwise the player sees "target world ... is not loaded, teleport cancelled".
+* If the destination is on another backend, that backend must currently be online (probed by KaProxy and broadcast in the presence snapshot); otherwise the player sees "target server ... is currently unavailable, teleport cancelled".
+* If the proxy channel is unavailable, the player sees "Cross-server service is currently unavailable".
+
+As a result, players no longer wait through the warm-up only to fail when the target world is unloaded or the target backend is offline.
+
+## Warp and Player Warp Sync
+
+When several backends share the same database, the `/warp` (public warps) and `/pwarp` (player warps) lists must stay consistent. KaTpa caches both lists in memory on each backend and keeps them in sync automatically:
+
+* After a warp is created, edited, or deleted locally and successfully persisted, KaTpa broadcasts the change through KaProxy to the other backends (topics `warp` / `player_warp`); each backend then reloads the corresponding cache.
+* When a player joins a backend, its caches are reloaded once (with a 2-second debounce), covering changes missed while that backend had no players online.
+
+A warp created on one backend therefore appears on the other backends without a restart. `/home` is stored per player and reloaded from the database on every join, so it does not need cross-server sync.
 
 ## Troubleshooting
 

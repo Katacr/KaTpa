@@ -27,6 +27,7 @@ modules:
     warmup-seconds: 3
     sounds: true
     particles: true
+    min-distance: 16
   dback:
     enabled: true
     warmup: true
@@ -52,6 +53,8 @@ modules:
     sounds: true
     particles: true
     default-amount: 1
+    bed-home: true
+    bed-home-name: 重生点
     name-max-length: 32
     description-max-length: 100
   pwarp:
@@ -77,6 +80,7 @@ modules:
 | `modules.tpa.allow-cross-world` | `true` | 是否允许跨世界传送 |
 | `modules.tpa.disabled-worlds` | `[]` | 禁止使用 KaTpa 的世界名称 |
 | `modules.back.enabled` | `true` | 返回上次位置（/back） |
+| `modules.back.min-distance` | `16` | 同一世界内传送时，新位置与旧位置距离小于该值（格）则忽略本次返回点记录；`0` 表示始终记录 |
 | `modules.dback.enabled` | `true` | 返回死亡位置（/dback） |
 | `modules.dback.default-amount` | `1` | 无 `katpa.dback.amount.<n>` 权限时的默认死亡位置保存数量 |
 | `modules.warp.enabled` | `true` | 公共地标传送（/warp、/setwarp、/delwarp） |
@@ -93,6 +97,8 @@ modules:
 | `modules.pwarp.description-max-length` | `100` | 玩家地标描述最大长度（设置描述时校验） |
 | `modules.home.enabled` | `true` | 个人家传送（/home、/sethome、/delhome） |
 | `modules.home.default-amount` | `1` | 无 `katpa.home.amount.<n>` 权限时的默认家数量上限 |
+| `modules.home.bed-home` | `true` | 玩家入睡并设置重生点（首次使用该床）时自动创建/覆盖名为 `bed-home-name` 的家 |
+| `modules.home.bed-home-name` | `重生点` | 入睡设置重生点时自动创建的家名称 |
 | `modules.home.name-max-length` | `32` | 家名称最大长度（重命名/创建时校验） |
 | `modules.home.description-max-length` | `100` | 家描述最大长度（设置描述时校验） |
 
@@ -149,6 +155,8 @@ storage:
 ```
 
 群组服建议使用所有子服共享的 MySQL 或 MariaDB。修改 `storage.type` 或 `storage.mysql` 后必须重启服务器。
+
+KaTpa 会定期检查长期数据库连接，并在 MySQL/MariaDB 因空闲超时或短暂中断而关闭连接后自动重连。所有存储模块的 JDBC 操作会被串行化，避免共享连接上的并发事务互相干扰。为避免金额累加等操作被重复执行，执行途中的失败写入不会自动重放；连接会被标记失效，下一次数据库操作将使用新连接，并在后台记录原失败。
 
 ## 重载
 
