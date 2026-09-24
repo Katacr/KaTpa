@@ -19,7 +19,6 @@ button:
     display:
       material: PLAYER_HEAD
       skull_owner: '{sender_name}'
-      empty_text: '暂无待处理请求'
       name: '&a{sender_name}'
       lore:
         - '&7类型: &f{request_type_display}'

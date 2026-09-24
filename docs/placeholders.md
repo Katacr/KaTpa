@@ -52,15 +52,15 @@
 
 | 占位符 | 说明 |
 | --- | --- |
-| `%katpa_dback_<n>%` | 第 n 个死亡位置的完整信息，逗号分隔 |
-| `%katpa_dback_<n>_location%` | 简略位置，逗号分隔：`世界,x,y,z`（不含服务器与朝向） |
-| `%katpa_dback_<n>_server%` | 所在服务器 ID |
-| `%katpa_dback_<n>_world%` | 所在世界 |
-| `%katpa_dback_<n>_x%` | X 坐标 |
-| `%katpa_dback_<n>_y%` | Y 坐标 |
-| `%katpa_dback_<n>_z%` | Z 坐标 |
-| `%katpa_dback_<n>_yaw%` | 朝向（偏航） |
-| `%katpa_dback_<n>_pitch%` | 俯仰角 |
+| `%katpa_dback%` | 最近一次死亡位置的完整信息，逗号分隔 |
+| `%katpa_dback_location%` | 简略位置，逗号分隔：`世界,x,y,z`（不含服务器与朝向） |
+| `%katpa_dback_server%` | 所在服务器 ID |
+| `%katpa_dback_world%` | 所在世界 |
+| `%katpa_dback_x%` | X 坐标 |
+| `%katpa_dback_y%` | Y 坐标 |
+| `%katpa_dback_z%` | Z 坐标 |
+| `%katpa_dback_yaw%` | 朝向（偏航） |
+| `%katpa_dback_pitch%` | 俯仰角 |
 
 ## 通用
 

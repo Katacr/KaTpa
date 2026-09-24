@@ -19,7 +19,6 @@ button:
       material: '{warp_icon}'
       custom_data: '{warp_custom_data}'
       item_model: '{warp_item_model}'
-      empty_text: '暂无地标，点击 A 新建'
       name: '&a{warp_name}'
       lore:
         - '&7世界: &f{warp_world}'
@@ -35,6 +34,14 @@ button:
         - 'katpa: warp edit {warp_name}'
       right:
         - 'katpa: warp edit {warp_name}'
+    # 列表未使用槽位的展示物品（可选，结构与 display 一致；取消注释启用）：
+    # empty-display:
+    #   material: LIGHT_GRAY_STAINED_GLASS_PANE
+    #   name: '&8空位'
+    # 列表未使用槽位被点击时的动作（可选，结构与 actions 一致）：
+    # empty-actions:
+    #   left:
+    #     - 'tell: &7这是空槽位'
   "A":
     display:
       material: ANVIL

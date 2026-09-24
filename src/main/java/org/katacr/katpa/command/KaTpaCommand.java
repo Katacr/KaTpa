@@ -34,10 +34,7 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
                 plugin.messages().send(sender, "no-permission");
                 return true;
             }
-            plugin.network().shutdown();
-            plugin.reloadConfig();
-            plugin.messages().reload();
-            plugin.network().initialize();
+            plugin.reloadAll();
             plugin.messages().send(sender, "config-reloaded");
             return true;
         }
@@ -307,17 +304,6 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
                     plugin.messages().send(player, "invalid-number");
                 }
             }
-            case "cooldown" -> {
-                if (args.length < 5) {
-                    plugin.messages().send(player, "pwarp-set-usage");
-                    return;
-                }
-                try {
-                    plugin.playerWarp().setCooldown(player, name, Integer.parseInt(args[4].trim()));
-                } catch (NumberFormatException e) {
-                    plugin.messages().send(player, "invalid-number");
-                }
-            }
             case "desc", "description" -> {
                 if (args.length < 5) {
                     plugin.messages().send(player, "pwarp-set-usage");
@@ -385,7 +371,7 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
             }
             if (args.length == 4 && sub.equals("set")) {
                 String prefix = args[3].toLowerCase(Locale.ROOT);
-                return List.of("name", "cost", "cooldown", "desc").stream()
+                return List.of("name", "cost", "desc").stream()
                         .filter(v -> v.startsWith(prefix))
                         .toList();
             }
@@ -425,6 +411,7 @@ public final class KaTpaCommand implements CommandExecutor, TabCompleter {
         }
         if (plugin.moduleEnabled("pwarp")) {
             keys.add(0, "pwarp");
+            keys.add(0, "pw");
             keys.add(0, "pwarpedit");
         }
         for (String key : keys) {

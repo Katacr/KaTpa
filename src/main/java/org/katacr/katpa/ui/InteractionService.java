@@ -14,8 +14,8 @@ import java.util.UUID;
 /**
  * KaTpa 交互界面的平台中立门面。
  *
- * 运行时先探测 Paper Dialog API，否则探测 Spigot Bungee Dialog API；具体适配器通过反射加载，
- * 从而保证单个插件 JAR 在另一平台缺少对应 API 类时仍可安全启动。全部方法委托给选定的适配器。
+ * 委托给基于原生容器（Chest/Anvil）库存菜单的 Inventory 实现，菜单由 {@code gui/} 资源驱动。
+ * 全部方法委托给选定的适配器。
  */
 public final class InteractionService {
     private final KaTpaPlugin plugin;
@@ -54,7 +54,7 @@ public final class InteractionService {
         platform.showRequestList(receiver);
     }
 
-    /** 请求发生增删后，仅在列表已打开时直接推送最新 Dialog。 */
+    /** 请求发生增删后，仅在列表已打开时直接推送最新菜单。 */
     public void refreshRequestList(Player receiver) {
         platform.refreshRequestList(receiver);
     }
@@ -79,17 +79,17 @@ public final class InteractionService {
         platform.showRelationEditor(player, type);
     }
 
-    /** 显示地标选择 Dialog，列出玩家可用地标。 */
+    /** 显示地标选择菜单，列出玩家可用地标。 */
     public void showWarpSelector(Player player) {
         platform.showWarpSelector(player);
     }
 
-    /** 显示管理员地标管理 Dialog。 */
+    /** 显示管理员地标管理菜单。 */
     public void showWarpManager(Player player) {
         platform.showWarpManager(player);
     }
 
-    /** 显示单个地标编辑 Dialog。 */
+    /** 显示单个地标编辑菜单。 */
     public void showWarpEditor(Player player, Warp warp) {
         platform.showWarpEditor(player, warp);
     }
@@ -104,6 +104,21 @@ public final class InteractionService {
         platform.showPwarpManager(player);
     }
 
+    /** 显示玩家地标排行榜。 */
+    public void showPwarpLeaderboard(Player player) {
+        platform.showPwarpLeaderboard(player);
+    }
+
+    /** 显示玩家收藏的玩家地标列表。 */
+    public void showPwarpFavorites(Player player) {
+        platform.showPwarpFavorites(player);
+    }
+
+    /** 显示玩家传送历史记录。 */
+    public void showPwarpHistory(Player player) {
+        platform.showPwarpHistory(player);
+    }
+
     /** 显示单个玩家地标编辑界面。 */
     public void showPwarpEditor(Player player, org.katacr.katpa.model.PlayerWarp warp) {
         platform.showPwarpEditor(player, warp);
@@ -114,12 +129,12 @@ public final class InteractionService {
         platform.showPwarpRate(player, warp);
     }
 
-    /** 显示玩家个人家选择 Dialog。 */
+    /** 显示玩家个人家选择菜单。 */
     public void showHomeSelector(Player player) {
         platform.showHomeSelector(player);
     }
 
-    /** 显示玩家个人家管理 Dialog。 */
+    /** 显示玩家个人家管理菜单。 */
     public void showHomeManager(Player player) {
         platform.showHomeManager(player);
     }
@@ -127,6 +142,11 @@ public final class InteractionService {
     /** 显示单个家的编辑界面（图标 / 更新位置 / 删除）。 */
     public void showHomeEditor(Player player, org.katacr.katpa.model.Home home) {
         platform.showHomeEditor(player, home);
+    }
+
+    /** 重新加载界面资源（gui/ 菜单定义）。 */
+    public void reload() {
+        platform.reload();
     }
 
     /** 在插件关闭时释放平台适配器状态。 */

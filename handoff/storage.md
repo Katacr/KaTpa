@@ -4,8 +4,7 @@
 
 ## 现状
 
-- 数据模型几乎全部为不可变 `record`，坐标类（`LocationRecord`/`Home`/`Warp`）内含 `server` 字段以支持跨服定位。
-- 存储层采用**集中管理的单物理连接**模式：`SettingsStore` 持有 `JdbcConnectionManager`，其余 store 只提交完整 SQL 操作，不再保存裸 `Connection` 引用。
+- 数据模型几乎全部为不可变 `record`，坐标类（`LocationRecord`/`Home`/`Warp`）内含 `server` 字段以支持跨服定位。- 存储层采用**集中管理的单物理连接**模式：`SettingsStore` 持有 `JdbcConnectionManager`，其余 store 只提交完整 SQL 操作，不再保存裸 `Connection` 引用。
 
 ## 模型清单（file:line）
 
@@ -19,8 +18,8 @@
 | LocationRecord | `model/LocationRecord.java:4` | server, world, x,y,z, yaw, pitch, timestamp |
 | NetworkRequestData | `model/NetworkRequestData.java:6` | 跨服请求上下文（含 traveler/destination 解析） |
 | RelationEntry | `model/RelationEntry.java:6` | targetId, targetName, type |
-| Home | `model/Home.java:6` | ownerId, name, server, world, x,y,z, yaw, pitch, createdAt |
-| Warp | `model/Warp.java:4` | name, server, world, x,y,z, yaw, pitch, permission, cooldownSeconds, cost, createdAt, updatedAt |
+| Home | `model/Home.java:6` | ownerId, name, server, serverId, world, x,y,z, yaw, pitch, createdAt |
+| Warp | `model/Warp.java:4` | name, server, serverId, world, x,y,z, yaw, pitch, permission, cooldownSeconds, cost, createdAt, updatedAt |
 | RequestType | `model/RequestType.java:4` | 枚举 TPA/TPA_HERE |
 
 ## 存储层
@@ -33,6 +32,9 @@
   - WarpStore：启动全量 `loadAll()`（`WarpStore.java`）；`reload()` 异步重读全表并在主线程合并。
   - HomeStore：**玩家级惰性加载**，进服按 ownerId `load()`（`HomeStore.java:89`），天然不存在跨服缓存陈旧问题。
 - **跨服缓存一致性（2026-09-15）**：`WarpStore`/`PlayerWarpStore` 的 `loadAll()` 改为**非破坏性合并**（`warps.putAll(...)` + `keySet().retainAll(...)`，先补新再删旧），避免 GUI 读取到瞬时空列表；`readAll()` 在单线程池读全表到局部 map，`reload()` 再 `Bukkit.getScheduler().runTask` 到主线程 `applyLoaded()`，与主线程的 `save()` put 串行。写成功后在 `executeUpdate()` 内调用 `plugin.network().notifyDataChanged(topic)` 广播（见 network.md）。
+- **服务器显示别名列 `server_id`（2026-09-20）**：`warp`/`home`/`player_warp` 三表含 `server_id` 列，存 `config.yml: server-id`（展示别名）；原 `server` 列仍存 KaProxy 真实服名（用于 `ensureTargetAvailable`/切服路由）。模型 `Warp`/`Home`/`PlayerWarp` 含 `serverId` 字段与 `displayServer()`（`serverId` 空则回退 `server`）。菜单/提示改用 `displayServer()`。存量行 `server_id` 为空 → 回退显示真实服名。跨服逻辑仍一律使用 `server`（内部名），别名仅展示层。
+- **移除列迁移工具（2026-09-21）**：因插件尚未发布、无需兼容旧库，删除 `storage/ColumnMigration.java` 及 `WarpStore`/`HomeStore`/`PlayerWarpStore` 中的 `ensureColumn` 调用；所有列直接写在 `CREATE TABLE` 中。
+- **移除 `player_warp.cooldown_seconds`（2026-09-21）**：冷却改为全局按玩家计时（`modules.pwarp.cooldown-seconds`），`PlayerWarp` 模型与建表语句删除该列；Lobby 已 `DROP TABLE katpa.player_warp` 由插件重建（数据未发布，无迁移）。
 
 ## 踩过的坑
 

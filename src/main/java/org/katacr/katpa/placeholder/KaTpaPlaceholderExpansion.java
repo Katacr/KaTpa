@@ -123,14 +123,32 @@ public final class KaTpaPlaceholderExpansion extends PlaceholderExpansion {
         };
     }
 
-    /** 解析 %katpa_dback_<n>[_字段]% 占位符。 */
+    /** 解析 %katpa_dback[_字段]% 占位符（只保留最近一次死亡位置）。 */
     private String handleDback(java.util.UUID playerId, String rest) {
-        List<LocationRecord> records = plugin.backStore().deathLocations(playerId);
-        return handleIndexed(rest, records.size(), index -> {
-            LocationRecord record = records.get(index - 1);
-            return new FieldValue(record.server(), record.world(), record.x(), record.y(), record.z(),
-                    record.yaw(), record.pitch());
-        });
+        LocationRecord record = plugin.backStore().deathLocation(playerId);
+        if (record == null) {
+            return "";
+        }
+        FieldValue value = new FieldValue(record.server(), record.world(), record.x(), record.y(),
+                record.z(), record.yaw(), record.pitch());
+        if (rest == null || rest.isEmpty()) {
+            return String.join(",", value.server, value.world,
+                    format(value.x), format(value.y), format(value.z),
+                    format(value.yaw), format(value.pitch));
+        }
+        String field = rest.startsWith("_") ? rest.substring(1) : rest;
+        return switch (field) {
+            case "location" -> String.join(",", value.world,
+                    format(value.x), format(value.y), format(value.z));
+            case "server" -> value.server;
+            case "world" -> value.world;
+            case "x" -> format(value.x);
+            case "y" -> format(value.y);
+            case "z" -> format(value.z);
+            case "yaw" -> format(value.yaw);
+            case "pitch" -> format(value.pitch);
+            default -> null;
+        };
     }
 
     /** 通用索引占位符解析：<n> 或 <n>_<字段>。 */

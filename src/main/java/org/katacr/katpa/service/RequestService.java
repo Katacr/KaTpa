@@ -174,6 +174,9 @@ public final class RequestService {
             plugin.messages().send(receiver, "request-stale");
             return;
         }
+        if (rejectIfReceiverWorldDisabled(receiver, request)) {
+            return;
+        }
         if (networkRequests.containsKey(request.id())) {
             if (plugin.network().accept(receiver, request.id(), false)) {
                 remove(request);
@@ -286,6 +289,9 @@ public final class RequestService {
         }
         plugin.sounds().play(receiver, "request-received", "tpa");
         if (plugin.settings().hasRelation(receiver.getUniqueId(), data.senderId(), ListType.WHITELIST)) {
+            if (rejectIfReceiverWorldDisabled(receiver, request)) {
+                return;
+            }
             if (plugin.network().accept(receiver, request.id(), true)) {
                 remove(request);
             }
@@ -619,6 +625,35 @@ public final class RequestService {
         if (notifyReceiverAcceptance) {
             plugin.messages().send(receiver, "request-accepted-receiver", Map.of("player", sender.getName()));
         }
+        return true;
+    }
+
+    /**
+     * 接收者当前所在世界命中 TPA 黑名单时拒绝该请求并返回 true。
+     *
+     * <p>接受环节在接收者所在子服执行，此时接收者世界即「源服无法预知的另一端」：
+     * TPA 时为目的地世界，TPA_HERE 时为旅行者出发世界。在此提前拒绝可避免跨服时
+     * 旅行者先被切服、却在落点阶段才因世界黑名单失败而滞留目标服。
+     */
+    private boolean rejectIfReceiverWorldDisabled(Player receiver, TeleportRequest request) {
+        if (!plugin.teleports().isCurrentWorldDisabled("tpa", receiver)) {
+            return false;
+        }
+        plugin.messages().send(receiver, "world-disabled");
+        if (networkRequests.containsKey(request.id())) {
+            if (!plugin.network().deny(receiver, request.id(), false)) {
+                plugin.messages().send(receiver, "proxy-unavailable");
+                return true;
+            }
+        } else {
+            Player sender = Bukkit.getPlayer(request.senderId());
+            if (sender != null) {
+                plugin.messages().send(sender, "target-world-disabled",
+                        Map.of("world", org.katacr.katpa.util.WorldNames.display(receiver.getWorld().getName())));
+            }
+        }
+        remove(request);
+        plugin.interactions().refreshRequestList(receiver);
         return true;
     }
 

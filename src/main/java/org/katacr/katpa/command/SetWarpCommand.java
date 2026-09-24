@@ -23,7 +23,7 @@ public final class SetWarpCommand implements CommandExecutor, TabCompleter {
         this.delete = delete;
     }
 
-    /** /setwarp <名称> 创建或更新；/delwarp <名称> 删除；无参数时打开管理 Dialog。 */
+    /** /setwarp <名称> 创建或更新；/delwarp <名称> 删除；无参数时打开管理菜单。 */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {

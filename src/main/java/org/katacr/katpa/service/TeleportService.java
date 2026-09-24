@@ -70,6 +70,36 @@ public final class TeleportService {
      */
     public boolean ensureTargetAvailable(Player traveler, String targetServer, String targetWorld,
                                          String worldMessageKey, Map<String, String> worldMessageArgs) {
+        return ensureTargetAvailable(traveler, targetServer, targetServer, targetWorld,
+                worldMessageKey, worldMessageArgs);
+    }
+
+    /**
+     * 吟唱或切服前校验目标是否可用（带服务器显示名）。
+     *
+     * @param displayServer    目标服务器用于提示的显示名（别名）；为 null 时用 targetServer
+     */
+    public boolean ensureTargetAvailable(Player traveler, String targetServer, String displayServer,
+                                         String targetWorld, String worldMessageKey,
+                                         Map<String, String> worldMessageArgs) {
+        return ensureTargetAvailable(null, traveler, targetServer, displayServer, targetWorld,
+                worldMessageKey, worldMessageArgs);
+    }
+
+    /**
+     * 吟唱或切服前校验目标是否可用（带模块世界黑名单校验）。
+     *
+     * @param module 模块名（如 {@code back}/{@code dback}/{@code home}/{@code warp}/{@code pwarp}）；
+     *               非空时目标世界若在该模块的 {@code disabled-worlds} 中则拒绝传送。
+     */
+    public boolean ensureTargetAvailable(String module, Player traveler, String targetServer,
+                                         String displayServer, String targetWorld,
+                                         String worldMessageKey, Map<String, String> worldMessageArgs) {
+        if (module != null && isWorldDisabled(module, targetWorld)) {
+            plugin.messages().send(traveler, "target-world-disabled",
+                    Map.of("world", org.katacr.katpa.util.WorldNames.display(targetWorld)));
+            return false;
+        }
         boolean crossServer = targetServer != null && !targetServer.isBlank()
                 && plugin.network().enabled() && !targetServer.equals(plugin.network().serverId());
         if (crossServer) {
@@ -78,7 +108,8 @@ public final class TeleportService {
                 return false;
             }
             if (!plugin.network().isServerAvailable(targetServer)) {
-                plugin.messages().send(traveler, "target-server-unavailable", Map.of("server", targetServer));
+                String shown = displayServer == null || displayServer.isBlank() ? targetServer : displayServer;
+                plugin.messages().send(traveler, "target-server-unavailable", Map.of("server", shown));
                 return false;
             }
             return true;
@@ -88,7 +119,8 @@ public final class TeleportService {
                 plugin.messages().send(traveler, worldMessageKey,
                         worldMessageArgs == null ? Map.of() : worldMessageArgs);
             } else {
-                plugin.messages().send(traveler, "target-world-unloaded", Map.of("world", targetWorld));
+                plugin.messages().send(traveler, "target-world-unloaded",
+                        Map.of("world", org.katacr.katpa.util.WorldNames.display(targetWorld)));
             }
             return false;
         }
@@ -382,9 +414,23 @@ public final class TeleportService {
         return Math.max(0, plugin.getConfig().getInt("modules." + module + ".warmup-seconds", 3));
     }
 
+    /** 判断世界是否出现在指定模块的世界黑名单中（{@code modules.<module>.disabled-worlds}）。 */
+    public boolean isWorldDisabled(String module, String worldName) {
+        if (worldName == null || worldName.isBlank()) {
+            return false;
+        }
+        return plugin.getConfig().getStringList("modules." + module + ".disabled-worlds").contains(worldName);
+    }
+
+    /** 判断玩家当前所在世界是否被指定模块禁止（用于阻止记录位置/创建点位）。 */
+    public boolean isCurrentWorldDisabled(String module, Player player) {
+        return player != null && player.getWorld() != null
+                && isWorldDisabled(module, player.getWorld().getName());
+    }
+
     /** 检查世界是否出现在禁用列表中。 */
     private boolean isDisabledWorld(String worldName) {
-        return plugin.getConfig().getStringList("modules.tpa.disabled-worlds").contains(worldName);
+        return isWorldDisabled("tpa", worldName);
     }
 
     /** 保存一次进行中的吟唱及其起点和倒计时任务。 */

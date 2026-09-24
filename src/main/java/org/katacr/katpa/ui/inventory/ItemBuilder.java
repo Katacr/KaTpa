@@ -57,10 +57,10 @@ public final class ItemBuilder {
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
             if (name != null) {
-                meta.setDisplayName(name);
+                org.katacr.katpa.text.TextParser.applyName(meta, name);
             }
             if (!lore.isEmpty()) {
-                meta.setLore(lore);
+                org.katacr.katpa.text.TextParser.applyLore(meta, lore);
             }
             meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS);
             stack.setItemMeta(meta);

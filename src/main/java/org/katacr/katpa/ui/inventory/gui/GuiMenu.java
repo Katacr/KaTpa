@@ -84,23 +84,52 @@ public final class GuiMenu {
     /** 单个按钮定义。 */
     public static final class GuiButton {
         private final String type;
+        private final String permission;
         private final ConfigurationSection display;
         private final ConfigurationSection actions;
+        private final ConfigurationSection emptyDisplay;
+        private final ConfigurationSection emptyActions;
+        private final ConfigurationSection lockDisplay;
+        private final ConfigurationSection lockActions;
+        private final ConfigurationSection litDisplay;
+        private final ConfigurationSection unlitDisplay;
 
-        private GuiButton(String type, ConfigurationSection display, ConfigurationSection actions) {
+        private GuiButton(String type, String permission, ConfigurationSection display, ConfigurationSection actions,
+                          ConfigurationSection emptyDisplay, ConfigurationSection emptyActions,
+                          ConfigurationSection lockDisplay, ConfigurationSection lockActions,
+                          ConfigurationSection litDisplay, ConfigurationSection unlitDisplay) {
             this.type = type;
+            this.permission = permission;
             this.display = display;
             this.actions = actions;
+            this.emptyDisplay = emptyDisplay;
+            this.emptyActions = emptyActions;
+            this.lockDisplay = lockDisplay;
+            this.lockActions = lockActions;
+            this.litDisplay = litDisplay;
+            this.unlitDisplay = unlitDisplay;
         }
 
         private static GuiButton parse(ConfigurationSection section) {
-            return new GuiButton(section.getString("type"), section.getConfigurationSection("display"),
-                    section.getConfigurationSection("actions"));
+            return new GuiButton(section.getString("type"), section.getString("permission"),
+                    section.getConfigurationSection("display"),
+                    section.getConfigurationSection("actions"),
+                    section.getConfigurationSection("empty-display"),
+                    section.getConfigurationSection("empty-actions"),
+                    section.getConfigurationSection("lock-display"),
+                    section.getConfigurationSection("lock-actions"),
+                    section.getConfigurationSection("lit-display"),
+                    section.getConfigurationSection("unlit-display"));
         }
 
         /** 返回列表类型标识（如 {@code MEMBERS_LIST}），非列表按钮返回 null。 */
         public String type() {
             return type;
+        }
+
+        /** 返回按钮可见所需的权限节点，未配置返回 null（对所有人可见）。 */
+        public String permission() {
+            return permission;
         }
 
         public ConfigurationSection display() {
@@ -109,6 +138,48 @@ public final class GuiMenu {
 
         public ConfigurationSection actions() {
             return actions;
+        }
+
+        /** 返回列表未使用槽位的自定义展示配置（{@code empty-display}），未配置返回 null。 */
+        public ConfigurationSection emptyDisplay() {
+            return emptyDisplay;
+        }
+
+        /** 返回未使用槽位被点击时的动作列表（{@code empty-actions} 下的 all/left/right 等）。 */
+        public List<String> emptyActionsFor(String clickType) {
+            List<String> result = new ArrayList<>();
+            if (emptyActions == null) {
+                return result;
+            }
+            result.addAll(emptyActions.getStringList("all"));
+            result.addAll(emptyActions.getStringList(clickType));
+            return result;
+        }
+
+        /** 返回无权限锁定槽位的展示配置（{@code lock-display}），未配置返回 null。 */
+        public ConfigurationSection lockDisplay() {
+            return lockDisplay;
+        }
+
+        /** 返回选中/点亮状态的展示配置（{@code lit-display}），未配置返回 null。 */
+        public ConfigurationSection litDisplay() {
+            return litDisplay;
+        }
+
+        /** 返回未选中/未点亮状态的展示配置（{@code unlit-display}），未配置返回 null。 */
+        public ConfigurationSection unlitDisplay() {
+            return unlitDisplay;
+        }
+
+        /** 返回无权限锁定槽位被点击时的动作列表（{@code lock-actions} 下的 all/left/right 等）。 */
+        public List<String> lockActionsFor(String clickType) {
+            List<String> result = new ArrayList<>();
+            if (lockActions == null) {
+                return result;
+            }
+            result.addAll(lockActions.getStringList("all"));
+            result.addAll(lockActions.getStringList(clickType));
+            return result;
         }
 
         /** 返回指定点击类型的动作列表（支持 left/right/all 等）。 */

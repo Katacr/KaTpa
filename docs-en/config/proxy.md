@@ -50,7 +50,7 @@ In cross-server mode, the real server ID of each backend is obtained automatical
 
 ## Player Experience
 
-Once enabled, the `/tpa` and `/tpahere` player dialogs contain players from the entire network. `/back` and `/dback` can also return across servers, and `/warp` and `/home` support cross-server teleportation too—the proxy switches the player to the target backend and teleports them to the exact coordinates. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers. Cross-server teleports behave like local ones: the warm-up countdown (`modules.<module>.warmup-seconds`, 3 by default) always completes before the backend switch, and moving, taking damage, or disconnecting cancels it.
+Once enabled, the `/tpa` and `/tpahere` player menus contain players from the entire network. `/back` and `/dback` can also return across servers, and `/warp` and `/home` support cross-server teleportation too—the proxy switches the player to the target backend and teleports them to the exact coordinates. Whitelists, blacklists, response modes, cooldowns, and warm-up cancellation rules work the same way across servers. Cross-server teleports behave like local ones: the warm-up countdown (`modules.<module>.warmup-seconds`, 3 by default) always completes before the backend switch, and moving, taking damage, or disconnecting cancels it.
 
 By default, if the target player changes backend during the warm-up, KaProxy follows their current server.
 

@@ -46,7 +46,11 @@ public abstract class InventoryMenu implements InventoryHolder {
 
     /** 构造库存并触发渲染，但不打开给玩家。 */
     public InventoryMenu build() {
-        this.inventory = Bukkit.createInventory(holder, size(), title());
+        net.kyori.adventure.text.Component titleComponent = org.katacr.katpa.text.TextParser.parse(title());
+        this.inventory = org.katacr.katpa.text.BukkitItemMetaCompat.createInventoryComponent(holder, size(), titleComponent);
+        if (this.inventory == null) {
+            this.inventory = Bukkit.createInventory(holder, size(), org.katacr.katpa.text.TextParser.toLegacy(titleComponent));
+        }
         this.holder.bind(inventory);
         render();
         return this;

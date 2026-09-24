@@ -37,6 +37,16 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         this.plugin = plugin;
     }
 
+    /** 读取语言文本并替换占位符（列表条目 lore 统一走 i18n，键前缀 {@code gui.list.}）。 */
+    private String lang(String key, Map<String, String> vars) {
+        return plugin.messages().text(key, vars == null ? Map.of() : vars);
+    }
+
+    /** 读取不含占位符的语言文本。 */
+    private String lang(String key) {
+        return lang(key, Map.of());
+    }
+
     @Override
     public List<GuiListItem> provide(PlayerLike player, String type, MenuSession session, int page, int perPage) {
         if (type == null) {
@@ -69,6 +79,9 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             }
             case "PWARP_OWNER_LIST" -> {
                 return buildPwarpOwnerList(player.getBukkit(), session, page, perPage);
+            }
+            case "PWARP_STARS" -> {
+                return buildPwarpStars(session, perPage);
             }
             case "HOME_LIST" -> {
                 return buildHomes(player.getBukkit(), page, perPage);
@@ -106,8 +119,8 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         List<TeleportRequest> all = requests.incoming(player.getUniqueId());
         for (TeleportRequest request : pageOf(all, page, perPage)) {
             String senderName = requests.senderName(request);
-            String typeDisplay = request.type() == org.katacr.katpa.model.RequestType.TPA_HERE
-                    ? "邀请你前往" : "请求前往你";
+            String typeDisplay = lang(request.type() == org.katacr.katpa.model.RequestType.TPA_HERE
+                    ? "gui.list.request.type-tpahere" : "gui.list.request.type-tpa");
             long remaining = Math.max(0, (request.expiresAt() - now) / 1000);
             ItemStack item = new ItemStack(Material.PLAYER_HEAD);
             ItemMeta meta = item.getItemMeta();
@@ -115,11 +128,11 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
                 skull.setOwningPlayer(Bukkit.getOfflinePlayer(senderName));
                 skull.setDisplayName("&a" + senderName);
                 skull.setLore(java.util.List.of(
-                        "&7类型: &f" + typeDisplay,
-                        "&7剩余: &f" + remaining + "秒",
+                        lang("gui.list.request.lore-type", Map.of("type", typeDisplay)),
+                        lang("gui.list.request.lore-remaining", Map.of("seconds", Long.toString(remaining))),
                         "",
-                        "&a[左键] 接受",
-                        "&c[右键] 拒绝"));
+                        lang("gui.list.request.lore-accept"),
+                        lang("gui.list.request.lore-deny")));
                 item.setItemMeta(skull);
             }
             Map<String, String> vars = new java.util.HashMap<>();
@@ -150,10 +163,11 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             }
         }
         for (org.katacr.katpa.model.NetworkPlayer p : pageOf(all, page, perPage)) {
+            String serverDisplay = "local".equals(p.server()) ? lang("gui.list.online.server-local") : p.server();
             ItemStack item = skull(p.name(), "&a" + p.name(), java.util.List.of(
-                    "&7服务器: &f" + ("local".equals(p.server()) ? "本服" : p.server()),
-                    "&7点击向该玩家发送传送请求",
-                    "&e点击请求"));
+                    lang("gui.list.online.lore-server", Map.of("server", serverDisplay)),
+                    lang("gui.list.online.lore-hint"),
+                    lang("gui.list.online.lore-click")));
             Map<String, String> vars = new java.util.HashMap<>();
             vars.put("player_name", p.name());
             vars.put("target_uuid", p.id().toString());
@@ -176,22 +190,22 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             if (meta != null) {
                 meta.setDisplayName("&a" + warp.name());
                 java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
-                        "&7世界: &f" + warp.world(),
-                        "&7服务器: &f" + warp.server(),
-                        "&7冷却: &f" + warp.cooldownSeconds() + "秒",
-                        "&7费用: &f" + warp.cost()));
+                        lang("gui.list.warp.lore-world", Map.of("world", warp.displayWorld())),
+                        lang("gui.list.warp.lore-server", Map.of("server", warp.displayServer())),
+                        lang("gui.list.warp.lore-cooldown", Map.of("seconds", String.valueOf(warp.cooldownSeconds()))),
+                        lang("gui.list.warp.lore-cost", Map.of("cost", String.valueOf(warp.cost())))));
                 if (warp.description() != null && !warp.description().isBlank()) {
-                    lore.add("&7描述: &f" + warp.description());
+                    lore.add(lang("gui.list.warp.lore-description", Map.of("description", warp.description())));
                 }
                 lore.add("");
                 boolean manager = session != null && "warp_manager".equals(session.menuId());
                 if (manager && player.hasPermission("katpa.warp.admin")) {
-                    lore.add("&a[左键] 编辑");
+                    lore.add(lang("gui.list.warp.lore-edit-left"));
                 } else {
-                    lore.add("&a[左键] 传送");
+                    lore.add(lang("gui.list.warp.lore-teleport-left"));
                 }
                 if (player.hasPermission("katpa.warp.admin")) {
-                    lore.add(manager ? "&e[右键] 编辑" : "&e[右键] 编辑");
+                    lore.add(lang("gui.list.warp.lore-edit-right"));
                 }
                 meta.setLore(lore);
                 item.setItemMeta(meta);
@@ -201,8 +215,8 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
             vars.put("warp_permission", warp.permission() == null ? "" : warp.permission());
             vars.put("warp_cooldown", String.valueOf(warp.cooldownSeconds()));
             vars.put("warp_cost", String.valueOf(warp.cost()));
-            vars.put("warp_world", warp.world());
-            vars.put("warp_server", warp.server());
+            vars.put("warp_world", warp.displayWorld());
+            vars.put("warp_server", warp.displayServer());
             vars.put("warp_description", warp.description() == null ? "" : warp.description());
             vars.put("warp_icon", warp.iconMaterial() == null ? Warp.DEFAULT_ICON : warp.iconMaterial());
             vars.put("warp_custom_data", warp.iconCustomData() == null ? "" : String.valueOf(warp.iconCustomData()));
@@ -212,7 +226,7 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         return items;
     }
 
-    /** 构建玩家地标列表（全局或自己的），按菜单与控制台差异展示操作提示。 */
+    /** 构建玩家地标列表（全局或自己的）；自己的视图按“已有→已解锁空槽→未解锁”展示。 */
     private List<GuiListItem> buildPlayerWarps(Player player, MenuSession session, int page, int perPage) {
         if (plugin.playerWarpStore() == null) {
             return java.util.Collections.emptyList();
@@ -221,87 +235,117 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         boolean ownMenu = session != null && "pwarp_manager".equals(session.menuId());
         List<PlayerWarp> all = ownMenu ? plugin.playerWarpStore().byOwner(player.getUniqueId())
                 : plugin.playerWarpStore().all();
-        for (PlayerWarp warp : pageOf(all, page, perPage)) {
-            ItemStack item = buildIconItem(warp.iconMaterial(), warp.iconCustomData(), warp.iconItemModel(),
-                    PlayerWarp.DEFAULT_ICON);
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null) {
-                meta.setDisplayName("&a" + warp.name());
-                double avg = plugin.warpRatingStore() != null
-                        ? plugin.warpRatingStore().averageStars(warp.id()) : 0;
-                int score = plugin.warpRatingStore() != null
-                        ? plugin.warpRatingStore().totalScore(warp.id()) : 0;
-                java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
-                        "&7创建者: &f" + warp.ownerName(),
-                        "&7描述: &f" + (warp.description() == null ? "" : warp.description()),
-                        "&7费用: &f" + warp.cost(),
-                        "&7评分: &f" + String.format("%.1f", avg) + "★ &7(" + score + "分)"));
-                lore.add("");
-                if (ownMenu) {
-                    lore.add("&a[左键] 编辑");
-                    lore.add("&e[右键] 编辑");
-                } else {
-                    lore.add("&a[左键] 传送");
-                    boolean fav = plugin.pwarpMeta() != null
-                            && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id());
-                    lore.add(fav ? "&c[Q键] 取消收藏" : "&e[Q键] 收藏");
-                }
-                meta.setLore(lore);
-                item.setItemMeta(meta);
-            }
-            Map<String, String> vars = new java.util.HashMap<>();
-            vars.put("pwarp_name", warp.name());
-            vars.put("pwarp_owner", warp.ownerName() == null ? "" : warp.ownerName());
-            vars.put("pwarp_description", warp.description() == null ? "" : warp.description());
-            vars.put("pwarp_cost", String.valueOf(warp.cost()));
-            vars.put("pwarp_cooldown", String.valueOf(warp.cooldownSeconds()));
-            vars.put("pwarp_stars", String.format("%.1f", plugin.warpRatingStore() != null
-                    ? plugin.warpRatingStore().averageStars(warp.id()) : 0));
-            vars.put("pwarp_score", String.valueOf(plugin.warpRatingStore() != null
-                    ? plugin.warpRatingStore().totalScore(warp.id()) : 0));
-            vars.put("pwarp_icon", warp.iconMaterial() == null ? PlayerWarp.DEFAULT_ICON : warp.iconMaterial());
-            vars.put("pwarp_custom_data", warp.iconCustomData() == null ? "" : String.valueOf(warp.iconCustomData()));
-            vars.put("pwarp_item_model", warp.iconItemModel() == null ? "" : warp.iconItemModel());
-            vars.put("pwarp_favorite", String.valueOf(plugin.pwarpMeta() != null
-                    && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id())));
-            items.add(new GuiListItem(item, vars));
+        for (PlayerWarp warp : all) {
+            items.add(buildPwarpListItem(player, warp, ownMenu));
         }
-        return items;
+        if (ownMenu) {
+            int totalSlots = Math.max(0, plugin.getConfig().getInt("modules.pwarp.total-slots", 10));
+            int maxWarps = plugin.playerWarp() != null ? plugin.playerWarp().maxWarps(player) : totalSlots;
+            int total = Math.max(totalSlots, all.size());
+            int empty = Math.max(0, Math.min(maxWarps - all.size(), total - all.size()));
+            for (int i = 0; i < empty; i++) {
+                items.add(new GuiListItem(null, Map.of(), GuiListItem.Kind.EMPTY));
+            }
+            int locked = total - items.size();
+            for (int i = 0; i < locked; i++) {
+                items.add(new GuiListItem(null, Map.of(), GuiListItem.Kind.LOCK));
+            }
+        }
+        return pageOf(items, page, perPage);
     }
 
-    /** 构建玩家地标排行榜（按累计加权得分降序），展示排名。 */
+    /** 构建单条玩家地标列表项（列表展示用，含创建者/评分等）。 */
+    private GuiListItem buildPwarpListItem(Player player, PlayerWarp warp, boolean ownMenu) {
+        ItemStack item = buildIconItem(warp.iconMaterial(), warp.iconCustomData(), warp.iconItemModel(),
+                PlayerWarp.DEFAULT_ICON);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("&a" + warp.name());
+            double avg = plugin.warpRatingStore() != null
+                    ? plugin.warpRatingStore().averageStars(warp.id()) : 0;
+            int score = plugin.warpRatingStore() != null
+                    ? plugin.warpRatingStore().totalScore(warp.id()) : 0;
+            java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
+                    lang("gui.list.pwarp.lore-owner", Map.of("owner", String.valueOf(warp.ownerName()))),
+                    lang("gui.list.pwarp.lore-description",
+                            Map.of("description", warp.description() == null ? "" : warp.description())),
+                    lang("gui.list.pwarp.lore-cost", Map.of("cost", String.valueOf(warp.cost()))),
+                    lang("gui.list.pwarp.lore-stars-score",
+                            Map.of("stars", String.format("%.1f", avg), "score", String.valueOf(score)))));
+            lore.add("");
+            if (ownMenu) {
+                lore.add(lang("gui.list.pwarp.lore-edit-left"));
+                lore.add(lang("gui.list.pwarp.lore-edit-right"));
+            } else {
+                lore.add(lang("gui.list.pwarp.lore-teleport-left"));
+                boolean fav = plugin.pwarpMeta() != null
+                        && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id());
+                lore.add(fav ? lang("gui.list.pwarp.lore-unfavorite-q") : lang("gui.list.pwarp.lore-favorite-q"));
+            }
+            meta.setLore(lore);
+            item.setItemMeta(meta);
+        }
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("pwarp_name", warp.name());
+        vars.put("pwarp_owner", warp.ownerName() == null ? "" : warp.ownerName());
+        vars.put("pwarp_description", warp.description() == null ? "" : warp.description());
+        vars.put("pwarp_cost", String.valueOf(warp.cost()));
+        vars.put("pwarp_stars", String.format("%.1f", plugin.warpRatingStore() != null
+                ? plugin.warpRatingStore().averageStars(warp.id()) : 0));
+        vars.put("pwarp_score", String.valueOf(plugin.warpRatingStore() != null
+                ? plugin.warpRatingStore().totalScore(warp.id()) : 0));
+        vars.put("pwarp_icon", warp.iconMaterial() == null ? PlayerWarp.DEFAULT_ICON : warp.iconMaterial());
+        vars.put("pwarp_custom_data", warp.iconCustomData() == null ? "" : String.valueOf(warp.iconCustomData()));
+        vars.put("pwarp_item_model", warp.iconItemModel() == null ? "" : warp.iconItemModel());
+        vars.put("pwarp_favorite", String.valueOf(plugin.pwarpMeta() != null
+                && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id())));
+        return new GuiListItem(item, vars, GuiListItem.Kind.NORMAL);
+    }
+
+    /** 构建玩家地标排行榜（按累计加权得分降序），数据取自排行榜缓存，不再逐条查库。 */
     private List<GuiListItem> buildPwarpLeaderboard(Player player, MenuSession session, int page, int perPage) {
         if (plugin.playerWarpStore() == null || plugin.warpRatingStore() == null) {
             return java.util.Collections.emptyList();
         }
         List<GuiListItem> items = new ArrayList<>();
-        List<UUID> rankedIds = plugin.warpRatingStore().leaderboard(10 + page * perPage);
+        List<org.katacr.katpa.storage.WarpRatingStore.LeaderboardEntry> ranked =
+                plugin.warpRatingStore().leaderboard(0);
         int rankBase = page * perPage;
-        for (int i = 0; i < rankedIds.size() && i < perPage; i++) {
-            PlayerWarp warp = plugin.playerWarpStore().find(rankedIds.get(i));
+        int end = perPage == Integer.MAX_VALUE ? ranked.size() : Math.min(ranked.size(), rankBase + perPage);
+        for (int i = rankBase; i < end; i++) {
+            org.katacr.katpa.storage.WarpRatingStore.LeaderboardEntry entry = ranked.get(i);
+            PlayerWarp warp = plugin.playerWarpStore().find(entry.warpId());
             if (warp == null) {
                 continue;
             }
             ItemStack item = buildIconItem(warp.iconMaterial(), warp.iconCustomData(), warp.iconItemModel(),
                     PlayerWarp.DEFAULT_ICON);
             ItemMeta meta = item.getItemMeta();
-            double avg = plugin.warpRatingStore().averageStars(warp.id());
-            int score = plugin.warpRatingStore().totalScore(warp.id());
+            double avg = entry.stars();
+            int score = entry.score();
             if (meta != null) {
-                meta.setDisplayName("&a#" + (rankBase + i + 1) + " " + warp.name());
+                meta.setDisplayName("&a#" + (i + 1) + " " + warp.name());
                 java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
-                        "&7创建者: &f" + warp.ownerName(),
-                        "&7描述: &f" + (warp.description() == null ? "" : warp.description()),
-                        "&7评分: &f" + String.format("%.1f", avg) + "★ &7(" + score + "分)",
-                        "&7传送费用: &f" + warp.cost()));
+                        lang("gui.list.pwarp.lore-owner", Map.of("owner", String.valueOf(warp.ownerName()))),
+                        lang("gui.list.pwarp.lore-description",
+                                Map.of("description", warp.description() == null ? "" : warp.description())),
+                        lang("gui.list.pwarp.lore-stars-score",
+                                Map.of("stars", String.format("%.1f", avg), "score", String.valueOf(score))),
+                        lang("gui.list.pwarp.lore-teleport-cost", Map.of("cost", String.valueOf(warp.cost())))));
                 lore.add("");
-                lore.add("&a[左键] 传送");
-                lore.add("&e[右键] 评分");
+                lore.add(lang("gui.list.pwarp.lore-teleport-left"));
+                if (!warp.ownerId().equals(player.getUniqueId())) {
+                    lore.add(lang("gui.list.pwarp.lore-rate-right"));
+                }
+                boolean leaderboardFav = plugin.pwarpMeta() != null
+                        && plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id());
+                lore.add(leaderboardFav ? lang("gui.list.pwarp.lore-unfavorite-q")
+                        : lang("gui.list.pwarp.lore-favorite-q"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
             }
             Map<String, String> vars = new java.util.HashMap<>();
-            vars.put("pwarp_rank", String.valueOf(rankBase + i + 1));
+            vars.put("pwarp_rank", String.valueOf(i + 1));
             vars.put("pwarp_name", warp.name());
             vars.put("pwarp_owner", warp.ownerName() == null ? "" : warp.ownerName());
             vars.put("pwarp_description", warp.description() == null ? "" : warp.description());
@@ -371,11 +415,35 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         for (String name : pageOf(sorted, page, perPage)) {
             UUID ownerId = nameToId.get(name.toLowerCase(Locale.ROOT));
             ItemStack item = skull(name, "&a" + name, java.util.List.of(
-                    "&7筛选该玩家创建的玩家地标", "&e点击筛选"));
+                    lang("gui.list.pwarp-owner.lore-hint"), lang("gui.list.pwarp-owner.lore-click")));
             Map<String, String> vars = new java.util.HashMap<>();
             vars.put("owner_name", name);
             vars.put("owner_uuid", ownerId != null ? ownerId.toString() : "");
             items.add(new GuiListItem(item, vars));
+        }
+        return items;
+    }
+
+    /**
+     * 构建评分星级选择列表：1-5 星，选中值（会话变量 {@code pwarp_rate_selected}，默认 5）
+     * 及其左侧为点亮状态（{@link GuiListItem.Kind#LIT}），右侧为未点亮（{@link GuiListItem.Kind#UNLIT}）。
+     */
+    private List<GuiListItem> buildPwarpStars(MenuSession session, int perPage) {
+        int total = Math.max(1, Math.min(5, perPage));
+        int selected = 5;
+        if (session != null) {
+            try {
+                selected = Integer.parseInt(session.get("pwarp_rate_selected"));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        selected = Math.max(1, Math.min(total, selected));
+        List<GuiListItem> items = new ArrayList<>();
+        for (int i = 1; i <= total; i++) {
+            Map<String, String> vars = new HashMap<>();
+            vars.put("pwarp_star", String.valueOf(i));
+            items.add(new GuiListItem(null, vars,
+                    i <= selected ? GuiListItem.Kind.LIT : GuiListItem.Kind.UNLIT));
         }
         return items;
     }
@@ -413,23 +481,27 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         if (meta != null) {
             meta.setDisplayName("&a" + warp.name());
             boolean fav = plugin.pwarpMeta().isFavorite(player.getUniqueId(), warp.id());
+            double stars = plugin.warpRatingStore() != null
+                    ? plugin.warpRatingStore().averageStars(warp.id()) : 0;
             java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
-                    "&7创建者: &f" + warp.ownerName(),
-                    "&7描述: &f" + (warp.description() == null ? "" : warp.description()),
-                    "&7费用: &f" + warp.cost(),
-                    "&7评分: &f" + String.format("%.1f", plugin.warpRatingStore() != null
-                            ? plugin.warpRatingStore().averageStars(warp.id()) : 0) + "★"));
+                    lang("gui.list.pwarp.lore-owner", Map.of("owner", String.valueOf(warp.ownerName()))),
+                    lang("gui.list.pwarp.lore-description",
+                            Map.of("description", warp.description() == null ? "" : warp.description())),
+                    lang("gui.list.pwarp.lore-cost", Map.of("cost", String.valueOf(warp.cost()))),
+                    lang("gui.list.pwarp.lore-stars", Map.of("stars", String.format("%.1f", stars)))));
             lore.add("");
             if (showFavorite) {
-                lore.add("&a[左键] 传送");
+                lore.add(lang("gui.list.pwarp.lore-teleport-left"));
                 if (isFavoriteView) {
-                    lore.add("&c[Q键] 取消收藏");
+                    lore.add(lang("gui.list.pwarp.lore-unfavorite-q"));
                 } else {
-                    lore.add(fav ? "&c[Q键] 取消收藏" : "&e[Q键] 收藏");
+                    lore.add(fav ? lang("gui.list.pwarp.lore-unfavorite-q") : lang("gui.list.pwarp.lore-favorite-q"));
                 }
             } else {
-                lore.add("&a[左键] 传送");
-                lore.add("&e[右键] 评分");
+                lore.add(lang("gui.list.pwarp.lore-teleport-left"));
+                if (!warp.ownerId().equals(player.getUniqueId())) {
+                    lore.add(lang("gui.list.pwarp.lore-rate-right"));
+                }
             }
             meta.setLore(lore);
             item.setItemMeta(meta);
@@ -439,7 +511,6 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         vars.put("pwarp_owner", warp.ownerName() == null ? "" : warp.ownerName());
         vars.put("pwarp_description", warp.description() == null ? "" : warp.description());
         vars.put("pwarp_cost", String.valueOf(warp.cost()));
-        vars.put("pwarp_cooldown", String.valueOf(warp.cooldownSeconds()));
         vars.put("pwarp_stars", String.format("%.1f", plugin.warpRatingStore() != null
                 ? plugin.warpRatingStore().averageStars(warp.id()) : 0));
         vars.put("pwarp_score", String.valueOf(plugin.warpRatingStore() != null
@@ -451,52 +522,61 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         return new GuiListItem(item, vars);
     }
 
-    /** 构建玩家个人家列表；点击传送。 */
+    /** 构建玩家个人家列表：已有家 → 已解锁空槽 → 未解锁锁定槽，按页码截取。 */
     private List<GuiListItem> buildHomes(Player player, int page, int perPage) {
         if (plugin.homeStore() == null) {
             return java.util.Collections.emptyList();
         }
-        List<GuiListItem> items = new ArrayList<>();
         List<Home> all = plugin.homeStore().all(player.getUniqueId());
-        for (Home home : pageOf(all, page, perPage)) {
+        int totalSlots = Math.max(0, plugin.getConfig().getInt("modules.home.total-slots", 10));
+        int maxHomes = plugin.home() != null ? plugin.home().maxHomes(player) : totalSlots;
+
+        List<GuiListItem> sequence = new ArrayList<>();
+        for (Home home : all) {
             ItemStack item = buildIconItem(home.iconMaterial(), home.iconCustomData(), home.iconItemModel(),
                     Home.DEFAULT_ICON);
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
                 meta.setDisplayName("&a" + home.name());
                 java.util.List<String> lore = new java.util.ArrayList<>(java.util.List.of(
-                        "&7世界: &f" + home.world()));
+                        lang("gui.list.home.lore-world", Map.of("world", home.displayWorld()))));
                 if (home.description() != null && !home.description().isBlank()) {
                     lore.add("&7" + home.description());
                 }
-                lore.add("&e点击传送");
+                lore.add(lang("gui.list.home.lore-teleport"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
             }
             Map<String, String> vars = new java.util.HashMap<>();
             vars.put("home_name", home.name());
-            vars.put("home_world", home.world());
-            vars.put("home_server", home.server());
+            vars.put("home_world", home.displayWorld());
+            vars.put("home_server", home.displayServer());
             vars.put("home_description", home.description() == null ? "" : home.description());
-            items.add(new GuiListItem(item, vars));
+            sequence.add(new GuiListItem(item, vars, GuiListItem.Kind.NORMAL));
         }
-        return items;
+        int total = Math.max(totalSlots, all.size());
+        int empty = Math.max(0, Math.min(maxHomes - all.size(), total - all.size()));
+        for (int i = 0; i < empty; i++) {
+            sequence.add(new GuiListItem(null, Map.of(), GuiListItem.Kind.EMPTY));
+        }
+        int locked = total - sequence.size();
+        for (int i = 0; i < locked; i++) {
+            sequence.add(new GuiListItem(null, Map.of(), GuiListItem.Kind.LOCK));
+        }
+        return pageOf(sequence, page, perPage);
     }
 
     /** 根据图标字段构建物品，字段为空时回退默认材质。 */
     private ItemStack buildIconItem(String material, Integer customData, String itemModel, String defaultMaterial) {
-        Material mat = Material.matchMaterial(material != null && !material.isBlank() ? material : defaultMaterial);
-        if (mat == null) {
-            mat = Material.matchMaterial(defaultMaterial);
-        }
-        ItemStack item = new ItemStack(mat == null ? Material.STONE : mat);
+        ItemStack item = org.katacr.katpa.util.ItemStacks.resolve(
+                material != null && !material.isBlank() ? material : defaultMaterial, Material.STONE);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             if (customData != null) {
                 meta.setCustomModelData(customData);
             }
             if (itemModel != null && !itemModel.isBlank()) {
-                setItemModelReflect(meta, itemModel);
+                org.katacr.katpa.text.BukkitItemMetaCompat.setItemModel(meta, itemModel);
             }
             item.setItemMeta(meta);
         }
@@ -510,7 +590,7 @@ public final class KaTpaGuiListProvider implements GuiListProvider {
         List<RelationEntry> all = plugin.settings().relations(player.getUniqueId(), type);
         for (RelationEntry entry : pageOf(all, page, perPage)) {
             ItemStack item = skull(entry.targetName(), "&a" + entry.targetName(), java.util.List.of(
-                    "&7点击从名单中移除", "&e点击移除"));
+                    lang("gui.list.relation.lore-hint"), lang("gui.list.relation.lore-click")));
             Map<String, String> vars = new java.util.HashMap<>();
             vars.put("member_name", entry.targetName());
             vars.put("member_uuid", entry.targetId().toString());

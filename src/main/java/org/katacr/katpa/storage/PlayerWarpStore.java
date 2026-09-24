@@ -57,7 +57,9 @@ public final class PlayerWarpStore {
                             owner_name VARCHAR(64) NOT NULL DEFAULT '',
                             name VARCHAR(64) NOT NULL,
                             server VARCHAR(64) NOT NULL,
+                            server_id VARCHAR(64) NOT NULL DEFAULT '',
                             world VARCHAR(128) NOT NULL,
+                            world_alias VARCHAR(128) NOT NULL DEFAULT '',
                             x DOUBLE NOT NULL,
                             y DOUBLE NOT NULL,
                             z DOUBLE NOT NULL,
@@ -68,7 +70,6 @@ public final class PlayerWarpStore {
                             icon_custom_data INT,
                             icon_item_model VARCHAR(255) NOT NULL DEFAULT '',
                             cost DOUBLE NOT NULL DEFAULT 0,
-                            cooldown_seconds INT NOT NULL DEFAULT 0,
                             created_at BIGINT NOT NULL
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         """);
@@ -80,7 +81,9 @@ public final class PlayerWarpStore {
                             owner_name TEXT NOT NULL DEFAULT '',
                             name TEXT NOT NULL,
                             server TEXT NOT NULL,
+                            server_id TEXT NOT NULL DEFAULT '',
                             world TEXT NOT NULL,
+                            world_alias TEXT NOT NULL DEFAULT '',
                             x REAL NOT NULL,
                             y REAL NOT NULL,
                             z REAL NOT NULL,
@@ -91,7 +94,6 @@ public final class PlayerWarpStore {
                             icon_custom_data INTEGER,
                             icon_item_model TEXT NOT NULL DEFAULT '',
                             cost REAL NOT NULL DEFAULT 0,
-                            cooldown_seconds INTEGER NOT NULL DEFAULT 0,
                             created_at INTEGER NOT NULL
                         )
                         """);
@@ -128,9 +130,9 @@ public final class PlayerWarpStore {
             Map<UUID, ConcurrentMap<String, UUID>> loadedOwners = new HashMap<>();
             try (var statement = connection.createStatement();
                  var rs = statement.executeQuery(
-                           "SELECT id, owner_id, owner_name, name, server, world, x, y, z, yaw, pitch, " +
+                           "SELECT id, owner_id, owner_name, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, " +
                                    "description, icon_material, icon_custom_data, icon_item_model, cost, " +
-                                   "cooldown_seconds, created_at FROM player_warp")) {
+                                   "created_at FROM player_warp")) {
                 while (rs.next()) {
                     PlayerWarp warp = new PlayerWarp(
                             UUID.fromString(rs.getString("id")),
@@ -138,7 +140,9 @@ public final class PlayerWarpStore {
                             rs.getString("owner_name"),
                             rs.getString("name"),
                             rs.getString("server"),
+                            rs.getString("server_id"),
                             rs.getString("world"),
+                            rs.getString("world_alias"),
                             rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
                             rs.getFloat("yaw"), rs.getFloat("pitch"),
                             rs.getString("description"),
@@ -146,7 +150,6 @@ public final class PlayerWarpStore {
                             rs.getObject("icon_custom_data") == null ? null : rs.getInt("icon_custom_data"),
                             rs.getString("icon_item_model"),
                             rs.getDouble("cost"),
-                            rs.getInt("cooldown_seconds"),
                             rs.getLong("created_at"));
                     loadedWarps.put(warp.id(), warp);
                     loadedNames.put(warp.name().toLowerCase(Locale.ROOT), warp.id());
@@ -181,28 +184,40 @@ public final class PlayerWarpStore {
                 .put(warp.name().toLowerCase(Locale.ROOT), warp.id());
     }
 
-    /** 创建或更新玩家地标，并异步持久化。 */
+    /** 创建或更新玩家地标，并异步持久化（不重算排行榜，编辑类写入不影响排行集合）。 */
     public void save(PlayerWarp warp) {
+        write(warp, false);
+    }
+
+    /** 创建玩家地标并异步持久化，写库成功后重算排行榜缓存。 */
+    public void create(PlayerWarp warp) {
+        write(warp, true);
+    }
+
+    /** 写入玩家地标；{@code refreshLeaderboard} 为 true 时在写库成功后重算排行榜缓存。 */
+    private void write(PlayerWarp warp, boolean refreshLeaderboard) {
         index(warp);
-        executeUpdate(connection -> {
+        executeUpdate(refreshLeaderboard, connection -> {
             String sql = mysql ? """
-                    INSERT INTO player_warp(id, owner_id, owner_name, name, server, world, x, y, z, yaw, pitch,
-                        description, icon_material, icon_custom_data, icon_item_model, cost, cooldown_seconds, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO player_warp(id, owner_id, owner_name, name, server, server_id, world, world_alias, x, y, z, yaw, pitch,
+                        description, icon_material, icon_custom_data, icon_item_model, cost, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE owner_id=VALUES(owner_id), owner_name=VALUES(owner_name), name=VALUES(name),
-                        server=VALUES(server), world=VALUES(world), x=VALUES(x), y=VALUES(y), z=VALUES(z),
+                        server=VALUES(server), server_id=VALUES(server_id), world=VALUES(world), world_alias=VALUES(world_alias),
+                        x=VALUES(x), y=VALUES(y), z=VALUES(z),
                         yaw=VALUES(yaw), pitch=VALUES(pitch), description=VALUES(description), icon_material=VALUES(icon_material),
                         icon_custom_data=VALUES(icon_custom_data), icon_item_model=VALUES(icon_item_model),
-                        cost=VALUES(cost), cooldown_seconds=VALUES(cooldown_seconds)
+                        cost=VALUES(cost)
                     """ : """
-                    INSERT INTO player_warp(id, owner_id, owner_name, name, server, world, x, y, z, yaw, pitch,
-                        description, icon_material, icon_custom_data, icon_item_model, cost, cooldown_seconds, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO player_warp(id, owner_id, owner_name, name, server, server_id, world, world_alias, x, y, z, yaw, pitch,
+                        description, icon_material, icon_custom_data, icon_item_model, cost, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET owner_id=excluded.owner_id, owner_name=excluded.owner_name, name=excluded.name,
-                        server=excluded.server, world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z,
+                        server=excluded.server, server_id=excluded.server_id, world=excluded.world, world_alias=excluded.world_alias,
+                        x=excluded.x, y=excluded.y, z=excluded.z,
                         yaw=excluded.yaw, pitch=excluded.pitch, description=excluded.description, icon_material=excluded.icon_material,
                         icon_custom_data=excluded.icon_custom_data, icon_item_model=excluded.icon_item_model,
-                        cost=excluded.cost, cooldown_seconds=excluded.cooldown_seconds
+                        cost=excluded.cost
                     """;
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, warp.id().toString());
@@ -210,23 +225,24 @@ public final class PlayerWarpStore {
                 stmt.setString(3, warp.ownerName() == null ? "" : warp.ownerName());
                 stmt.setString(4, warp.name());
                 stmt.setString(5, warp.server());
-                stmt.setString(6, warp.world());
-                stmt.setDouble(7, warp.x());
-                stmt.setDouble(8, warp.y());
-                stmt.setDouble(9, warp.z());
-                stmt.setFloat(10, warp.yaw());
-                stmt.setFloat(11, warp.pitch());
-                stmt.setString(12, warp.description() == null ? "" : warp.description());
-                stmt.setString(13, warp.iconMaterial() == null ? "" : warp.iconMaterial());
+                stmt.setString(6, warp.serverId() == null ? "" : warp.serverId());
+                stmt.setString(7, warp.world());
+                stmt.setString(8, warp.worldAlias() == null ? "" : warp.worldAlias());
+                stmt.setDouble(9, warp.x());
+                stmt.setDouble(10, warp.y());
+                stmt.setDouble(11, warp.z());
+                stmt.setFloat(12, warp.yaw());
+                stmt.setFloat(13, warp.pitch());
+                stmt.setString(14, warp.description() == null ? "" : warp.description());
+                stmt.setString(15, warp.iconMaterial() == null ? "" : warp.iconMaterial());
                 if (warp.iconCustomData() == null) {
-                    stmt.setNull(14, Types.INTEGER);
+                    stmt.setNull(16, Types.INTEGER);
                 } else {
-                    stmt.setInt(14, warp.iconCustomData());
+                    stmt.setInt(16, warp.iconCustomData());
                 }
-                stmt.setString(15, warp.iconItemModel() == null ? "" : warp.iconItemModel());
-                stmt.setDouble(16, warp.cost());
-                stmt.setInt(17, warp.cooldownSeconds());
-                stmt.setLong(18, warp.createdAt());
+                stmt.setString(17, warp.iconItemModel() == null ? "" : warp.iconItemModel());
+                stmt.setDouble(18, warp.cost());
+                stmt.setLong(19, warp.createdAt());
                 stmt.executeUpdate();
             }
         });
@@ -243,7 +259,7 @@ public final class PlayerWarpStore {
                 owned.remove(name.toLowerCase(Locale.ROOT));
             }
         }
-        executeUpdate(connection -> {
+        executeUpdate(true, connection -> {
             try (PreparedStatement stmt = connection.prepareStatement(
                     "DELETE FROM player_warp WHERE owner_id=? AND name=?")) {
                 stmt.setString(1, ownerId.toString());
@@ -322,14 +338,18 @@ public final class PlayerWarpStore {
         }
     }
 
-    /** 将数据库写操作放入单线程队列并统一记录异常；写入成功后广播变更通知其他子服刷新。 */
-    private void executeUpdate(SqlOperation operation) {
+    /** 将数据库写操作放入单线程队列并统一记录异常；写入成功后按需重算排行榜缓存并广播变更。 */
+    private void executeUpdate(boolean refreshLeaderboard, SqlOperation operation) {
         databaseExecutor.execute(() -> {
             try {
                 connections.executeVoid(operation::run);
             } catch (SQLException e) {
                 plugin.getLogger().severe("保存玩家地标失败: " + e.getMessage());
                 return;
+            }
+            // 单线程队列：在本次写入提交后重算排行榜缓存，避免与写事务竞争或漏算。
+            if (refreshLeaderboard && plugin.warpRatingStore() != null) {
+                plugin.warpRatingStore().refreshLeaderboard();
             }
             if (plugin.network() != null) {
                 plugin.network().notifyDataChanged(SYNC_TOPIC);

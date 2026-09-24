@@ -1,6 +1,6 @@
 # UI 交互层（ui）
 
-> 最后更新：2026-09-15（修复菜单列表条目颜色码未解析）
+> 最后更新：2026-09-20（列表空槽位自定义 empty-display/empty-actions；按钮级 permission；pwarp 删除入口）
 
 ## 现状
 
@@ -62,7 +62,7 @@
 - `display.custom_model_data` 与 `display.custom_data` 等价（都映射到 `ItemMeta.setCustomModelData`）；`display.item_model` 为 `"namespace:key"` 字符串，映射到 1.21.4+ 的 `ItemMeta.setItemModel(NamespacedKey)`，旧版本静默忽略。`item_model`/`custom_data`/`custom_model_data` 均支持 `{key}` 变量替换（如 `material: "{warp_icon}"` 配合 `item_model: "{warp_item_model}"`）。
 
 **动作语法**：
-- `open: <menu>[:args]` 打开菜单、`close` 关闭、`tell: <文本>`、`actionbar: <文本>`、`command: <指令>`、`console: <指令>`、`katpa: <namespace> <payload>`（业务动作）。
+- `open: <menu>[:args]` 打开菜单（**继承当前会话变量**，便于子菜单标题引用来源列表项变量，如 `pwarp_owner_list` 的 `{owner_name}`）、`close` 关闭、`tell: <文本>`、`actionbar: <文本>`、`command: <指令>`、`console: <指令>`、`katpa: <namespace> <payload>`（业务动作）。
 
 **变量**：`{key}` 会话/参数变量（如 `{mode_display}`/`{whitelist_count}`/`{members_name}`/`{warp_name}`）+ `%papi%` PlaceholderAPI 替换 + `&` 颜色码。
 
@@ -74,4 +74,22 @@
 
 **家编辑器（2026-09-15）：** 新增 `gui/home_editor.yml` 二级菜单（图标/更新位置/删除）；`home_selector.yml` 与 `home_manager.yml` 列表右键由「删除」改为 `katpa: home edit <name>` 打开编辑器。对应动作：`home edit/update/delete`；新增 `InteractionPlatform.showHomeEditor` 与 `HomeService.updateLocation`（保留描述/图标，仅更新坐标/世界/服务器）。图标/更新位置后经 `KaTpaGuiActions.reopenHomeMenu` 按来源菜单回编辑器或管理列表。
 
+**列表空槽位自定义 + 按钮权限（2026-09-20）：** 带 `type` 的列表按钮支持 4 个**平级**主键，内部结构与前两者一致、互不混入：
+- `display` / `actions`（原有，作用于列表条目）
+- `empty-display` / `empty-actions`（新增，作用于**未使用槽位**：`empty-display` 结构与 `display` 相同，`empty-actions` 结构与 `actions` 相同，支持 `all`/`left`/`right`/`drop` 等）
+
+实现：`GuiMenu.GuiButton` 新增 `emptyDisplay`/`emptyActions` 字段与 `emptyDisplay()`/`emptyActionsFor(clickType)`（只读平级键，不再从 display/actions 内取）；`GuiManager.renderMenu` 列表条目不足时对剩余槽位渲染 `empty-display`（未配置则留空、点击无动作）；`handleClick` 对登记的空槽位执行 `empty-actions`。
+
+**空列表占位移除（2026-09-21）**：列表无任何数据时**不再插入 BARRIER 占位物品**，全部列表槽位登记为 `GuiListItem.Kind.BLANK`（不渲染、点击不执行任何动作）；删除 `emptyPlaceholder`/`renderPlaceholderSlot` 方法，并移除全部 `gui/*.yml` 的 `empty_text` 键。
+
+**点亮/未点亮（2026-09-21）**：`GuiMenu.GuiButton` 新增 `litDisplay`/`unlitDisplay`（平级键 `lit-display`/`unlit-display`）；`GuiListItem.Kind` 新增 `LIT`/`UNLIT`，渲染时用对应 display、动作沿用按钮 `actions`。用于评分菜单 `PWARP_STARS`。
+
+按钮级 `permission`：`GuiButton.permission()`（键 `permission`）；`GuiManager.canView(player, button)` 在渲染与点击时过滤无权限按钮（未配置则人人可见）。用于「管理员强行删除」按钮。
+
+**pwarp 删除入口（2026-09-20）：** `pwarp_editor.yml` 新增 `R`（本人删除，`katpa: pwarp delete`）与 `Q`（管理员强行删除，按钮 `permission: katpa.pwarp.admin`）；`pwarp_selector` 列表项新增右键 `katpa: pwarp edit` 便于从主列表进入编辑器。删除最终仍走 `PlayerWarpService.delete`（`canEdit`=创建者或 `katpa.pwarp.admin`）。
+
 **修复记录（2026-09-10）：** Hopper 漏斗窗口拒绝/接受按钮无响应。根因：`RequestHopperMenu.respond()` 使用 `p.performCommand("tpdeny " + requestId)` + `close()`，在库存关闭期间 `performCommand` 行为不可靠，命令可能未执行或执行不完整。修复：移除 `respond()` 方法，新增 `accept()`/`deny()` 两个私有方法，直接调用 `((KaTpaPlugin) plugin).requests().accept(p, request.id())` 和 `.deny(p, request.id())`，跳过命令解析层。同时移除未使用的 `UUID` 导入和 `render()` 中的 `requestId` 局部变量。
+
+## 文本/图标能力（2026-09-18）
+
+GUI 物品名/lore/标题、消息、actionbar 现统一经 `org.katacr.katpa.text.TextParser`（legacy+MiniMessage，支持 CE 字形与 `&item:[物品]` sprite）；物品 `material` 经 `util/ItemStacks` 支持 `ce:`/`ia:`/`oraxen:` 外部物品。详见 `INDEX.md` 同名小节。

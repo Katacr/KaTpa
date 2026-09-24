@@ -18,7 +18,7 @@ Run:
 /tpa
 ```
 
-Choose a target from the player dialog. You can also enter the player name directly:
+Choose a target from the player menu. You can also enter the player name directly:
 
 ```text
 /tpa Steve

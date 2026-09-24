@@ -14,7 +14,8 @@
 - **在线子服列表（2026-09-12 新增）**：presence 包在玩家列表后追加 `int serverCount + serverName(UTF)*`，由 KaProxy 侧 ping 探活后仅下发在线子服。后端 `CrossServerService` 解析到 `servers` 集合，`isServerAvailable(name)` 供吟唱前校验；旧版代理无该字段时 `readServerList` 捕获 `EOFException` 返回 null，退化为“仅要求代理连通”。
 - **tpa 事务**：`request_create/accept/deny/cancel/warmup_*/arrival_*`。
 - **back 事务**：`back_request/back_arrival_complete/failed`。
-- **数据变更同步（2026-09-15 新增）**：后端写入 warp/player_warp 成功后发 `core/data_changed`（payload：`topic` UTF，白名单 warp/player_warp），KaProxy `KaProxyCore.handleDataChanged` 转发给除来源外的所有后端（payload：`sourceServer` UTF + `topic` UTF）；后端收到后 `WarpStore.reload()` / `PlayerWarpStore.reload()`。`CrossServerService.notifyDataChanged(topic)` 负责在写成功后从 DB 线程调度到主线程发送（需 `available()`）。玩家加入时 `refreshGlobalCaches()`（2s 去抖）兜底重载，覆盖该服离线期间错过的广播。
+- **数据变更同步（2026-09-15 新增）**：后端写入 warp/player_warp 成功后发 `core/data_changed`（payload：`topic` UTF，白名单 warp/player_warp/**warp_rating**），KaProxy `KaProxyCore.handleDataChanged` 转发给除来源外的所有后端（payload：`sourceServer` UTF + `topic` UTF）；后端收到后 `WarpStore.reload()` / `PlayerWarpStore.reload()`（并触发排行榜缓存重算）/ `WarpRatingStore.refreshLeaderboard(false)`。`CrossServerService.notifyDataChanged(topic)` 负责在写成功后从 DB 线程调度到主线程发送（需 `available()`）。玩家加入时 `refreshGlobalCaches()`（2s 去抖）兜底重载，覆盖该服离线期间错过的广播。
+- **`warp_rating` 主题（2026-09-21）**：评分成功或创建/删除地标后广播，其他后端仅重算排行榜缓存（`refreshLeaderboard(false)`，不再回环广播）；KaProxy `DATA_SYNC_TOPICS` 已加入该主题（`KaProxyCore.java:44`）。
 - 未连接代理（`!available()`）且非 sync 的消息直接返回 false。
 
 ## 跨服传送流程

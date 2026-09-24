@@ -22,7 +22,7 @@ The whitelist automatically accepts requests from that player, while the blackli
 
 ## Why can't I find an offline player in list management?
 
-The player must have joined the current server at least once before KaTpa can remember them. The add-player dialog lists currently online players by default.
+The player must have joined the current server at least once before KaTpa can remember them. The add-player menu lists currently online players by default.
 
 ## Why didn't my database configuration change take effect?
 
@@ -36,17 +36,13 @@ KaTpa uses a single-file mode by default, so normally only `players.db` remains.
 
 The player has never been teleported, has never disconnected, or the world at the previous location has been unloaded. In cross-server mode, make sure the KaProxy Back module is enabled.
 
-## `/dback` only saves one death location
-
-The default permission `katpa.dback.amount.1` only allows 1 death location. Grant `katpa.dback.amount.3` or a higher value in a permission plugin to increase the limit.
-
 ## Cross-server `/back` or `/dback` fails
 
 Check that the KaProxy Back module is enabled, `proxy.enabled` is `true`, the target backend is online, and the world is loaded.
 
 ## `/warp` says insufficient funds
 
-The warp has a teleport cost set, which requires a Vault economy plugin and sufficient account balance. Administrators can adjust or remove the cost through the `/setwarp` management dialog.
+The warp has a teleport cost set, which requires a Vault economy plugin and sufficient account balance. Administrators can adjust or remove the cost through the `/setwarp` management menu.
 
 ## `/sethome` says the home limit is reached
 

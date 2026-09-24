@@ -4,6 +4,7 @@ main: org.katacr.katpa.KaTpaPlugin
 api-version: '1.16'
 description: 玩家传送请求、邀请与偏好管理
 authors: [katacr]
+softdepend: [Vault, PlayerPoints, PlaceholderAPI, CraftEngine, ItemsAdder, Oraxen, Multiverse-Core]
 
 commands:
   katap:
@@ -41,8 +42,8 @@ commands:
     usage: /back
     permission: katpa.back
   dback:
-    description: 返回死亡位置
-    usage: /dback [序号]
+    description: 返回最近一次死亡位置
+    usage: /dback
     permission: katpa.dback
   warp:
     description: 传送到地标
@@ -69,8 +70,12 @@ commands:
     usage: /delhome [名称]
     permission: katpa.home
   pwarp:
-    description: 传送到玩家地标
-    usage: /pwarp [名称]
+    description: 打开玩家地标排行榜与管理入口
+    usage: /pwarp [leaderboard|favorites|mine|history|admin]
+    permission: katpa.pwarp.use
+  pw:
+    description: 快捷传送到玩家地标
+    usage: /pw <名称>
     permission: katpa.pwarp.use
 
 permissions:

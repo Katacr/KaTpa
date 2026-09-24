@@ -62,6 +62,10 @@ public final class HomeService {
 
     /** 玩家创建或更新家位置。 */
     public boolean setHome(Player player, String name) {
+        if (plugin.teleports().isCurrentWorldDisabled("home", player)) {
+            plugin.messages().send(player, "world-creation-disabled");
+            return false;
+        }
         if (name.isBlank()) {
             plugin.messages().send(player, "home-name-empty");
             return false;
@@ -78,10 +82,13 @@ public final class HomeService {
         }
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
+        String serverId = plugin.network().displayServerId();
+        String world = loc.getWorld().getName();
+        String worldAlias = org.katacr.katpa.util.WorldNames.display(world);
         long now = System.currentTimeMillis();
         Home home = new Home(
                 existing != null ? existing.id() : java.util.UUID.randomUUID(),
-                player.getUniqueId(), name, server, loc.getWorld().getName(),
+                player.getUniqueId(), name, server, serverId, world, worldAlias,
                 loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch(),
                 existing != null ? existing.description() : "",
                 existing != null ? existing.iconMaterial() : "",
@@ -91,6 +98,8 @@ public final class HomeService {
         plugin.homeStore().save(home);
         plugin.messages().send(player, existing != null ? "home-updated" : "home-created",
                 Map.of("name", name));
+        org.bukkit.Bukkit.getPluginManager().callEvent(
+                new org.katacr.katpa.api.event.KaTpaEvent(player, org.katacr.katpa.api.event.KaTpaEvent.Action.SET_HOME, name));
         return true;
     }
 
@@ -146,9 +155,16 @@ public final class HomeService {
             plugin.messages().send(player, "home-not-found", Map.of("name", name));
             return false;
         }
+        if (plugin.teleports().isCurrentWorldDisabled("home", player)) {
+            plugin.messages().send(player, "world-creation-disabled");
+            return false;
+        }
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
-        Home updated = new Home(home.id(), home.ownerId(), home.name(), server, loc.getWorld().getName(),
+        String serverId = plugin.network().displayServerId();
+        String world = loc.getWorld().getName();
+        Home updated = new Home(home.id(), home.ownerId(), home.name(), server, serverId, world,
+                org.katacr.katpa.util.WorldNames.display(world),
                 loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch(),
                 home.description(), home.iconMaterial(), home.iconCustomData(), home.iconItemModel(),
                 home.createdAt());
@@ -199,8 +215,8 @@ public final class HomeService {
 
     /** 同服家传送。 */
     private void teleportLocal(Player player, Home home) {
-        if (!plugin.teleports().ensureTargetAvailable(player, home.server(), home.world(),
-                "home-world-unloaded", Map.of("name", home.name()))) {
+        if (!plugin.teleports().ensureTargetAvailable("home", player, home.server(), home.displayServer(),
+                home.world(), "home-world-unloaded", Map.of("name", home.name()))) {
             return;
         }
         Location target = new Location(
@@ -218,13 +234,16 @@ public final class HomeService {
                 plugin.sounds().playAt(target, "teleport", "home");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("home-success", Map.of("name", home.name()), false));
+                org.bukkit.Bukkit.getPluginManager().callEvent(
+                        new org.katacr.katpa.api.event.KaTpaEvent(player, org.katacr.katpa.api.event.KaTpaEvent.Action.HOME, home.name()));
             });
         });
     }
 
     /** 跨服家传送：先完成源服吟唱，再请求代理切服并在目标服落点。 */
     private void teleportCrossServer(Player player, Home home) {
-        if (!plugin.teleports().ensureTargetAvailable(player, home.server(), null, null, null)) {
+        if (!plugin.teleports().ensureTargetAvailable("home", player, home.server(), home.displayServer(),
+                home.world(), null, null)) {
             return;
         }
         plugin.back().recordLocation(player);
@@ -232,7 +251,7 @@ public final class HomeService {
                 home.server(), home.world(), home.x(), home.y(), home.z(),
                 home.yaw(), home.pitch(), System.currentTimeMillis());
         plugin.teleports().beginDirect(player, "home", () -> {
-            if (!plugin.network().backRequest(player, home.server(), loc, success -> {
+            if (!plugin.network().backRequest(player, home.server(), loc, "home", success -> {
                 if (!Boolean.TRUE.equals(success)) {
                     plugin.messages().send(player, "home-failed",
                             Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
@@ -249,7 +268,9 @@ public final class HomeService {
         private final java.util.UUID ownerId;
         private String name;
         private final String server;
+        private final String serverId;
         private final String world;
+        private final String worldAlias;
         private final double x, y, z;
         private final float yaw, pitch;
         private String description;
@@ -263,7 +284,9 @@ public final class HomeService {
             this.ownerId = home.ownerId();
             this.name = home.name();
             this.server = home.server();
+            this.serverId = home.serverId();
             this.world = home.world();
+            this.worldAlias = home.worldAlias();
             this.x = home.x();
             this.y = home.y();
             this.z = home.z();
@@ -283,7 +306,7 @@ public final class HomeService {
         HomeBuilder iconItemModel(String v) { this.iconItemModel = v; return this; }
 
         Home build() {
-            return new Home(id, ownerId, name, server, world, x, y, z, yaw, pitch,
+            return new Home(id, ownerId, name, server, serverId, world, worldAlias, x, y, z, yaw, pitch,
                     description, iconMaterial, iconCustomData, iconItemModel, createdAt);
         }
     }

@@ -16,4 +16,5 @@
   * [Commands](perm/commands.md)
   * [Permissions](perm/permissions.md)
 * [PlaceholderAPI Placeholders](placeholders.md)
+* [API Events](api.md)
 * [FAQ](faq.md)

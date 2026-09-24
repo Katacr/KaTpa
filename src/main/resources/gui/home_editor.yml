@@ -2,7 +2,7 @@ title: '&8KaTpa &f编辑家: &f{home_name}'
 
 Layout:
   - '#########'
-  - '#  I U  #'
+  - '# N I U #'
   - '#  D X  #'
   - '#########'
 
@@ -11,6 +11,15 @@ button:
     display:
       material: GRAY_STAINED_GLASS_PANE
       name: ' '
+  "N":
+    display:
+      material: NAME_TAG
+      name: '&a名称: &f{home_name}'
+      lore:
+        - '&e点击修改名称'
+    actions:
+      left:
+        - 'katpa: home set name {home_name}'
   "I":
     display:
       material: {home_icon}
@@ -18,7 +27,7 @@ button:
       item_model: '{home_item_model}'
       name: '&a图标: &f{home_icon}'
       lore:
-        - '&7手持物品点击设置图标'
+        - '&7点击后关闭菜单，手持物品再点聊天栏 [此处]'
         - '&e点击设置'
     actions:
       left:

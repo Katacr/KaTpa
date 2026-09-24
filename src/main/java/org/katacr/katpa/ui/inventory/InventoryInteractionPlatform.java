@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 基于原生容器（Chest）库存与 gui/ 资源 YAML 的 KaTpa 交互实现。
  *
- * 替代原 Paper/Spigot Dialog 适配器，向 1.16.5 与 Java 16 兼容。菜单布局、按钮与动作
+ * 替代早期 Paper/Spigot Dialog 适配器，向 1.16.5 与 Java 16 兼容。菜单布局、按钮与动作
  * 全部由 {@code resources/gui/*.yml} 驱动，首次开服提取到 {@code plugins/KaTpa/gui/} 供定制。
  */
 public final class InventoryInteractionPlatform implements InteractionPlatform, PlatformNamed {
@@ -70,8 +70,13 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
     }
 
     @Override
+    public void reload() {
+        gui.reload();
+    }
+
+    @Override
     public void sendActionBar(Player player, Component message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(SECTION.serialize(message)));
+        org.katacr.katpa.text.AdventureSender.sendActionBar(player, message);
     }
 
     @Override
@@ -176,7 +181,7 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
     public void showRelationEditor(Player player, ListType type) {
         java.util.Map<String, String> vars = new java.util.HashMap<>();
         vars.put("list_type", type.name().toLowerCase());
-        vars.put("list_type_display", "whitelist".equalsIgnoreCase(type.name()) ? "白名单" : "黑名单");
+        vars.put("list_type_display", plugin.messages().text("list." + type.name().toLowerCase()));
         gui.openMenu(player, "relation_editor:" + type.name().toLowerCase(), type.name().toLowerCase(), vars);
     }
 
@@ -217,12 +222,26 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
     }
 
     @Override
+    public void showPwarpLeaderboard(Player player) {
+        gui.openMenu(player, "pwarp_leaderboard");
+    }
+
+    @Override
+    public void showPwarpFavorites(Player player) {
+        gui.openMenu(player, "pwarp_favorites");
+    }
+
+    @Override
+    public void showPwarpHistory(Player player) {
+        gui.openMenu(player, "pwarp_history");
+    }
+
+    @Override
     public void showPwarpEditor(Player player, org.katacr.katpa.model.PlayerWarp warp) {
         java.util.Map<String, String> vars = new java.util.HashMap<>();
         if (warp != null) {
             vars.put("pwarp_name", warp.name());
             vars.put("pwarp_description", warp.description() == null ? "" : warp.description());
-            vars.put("pwarp_cooldown", String.valueOf(warp.cooldownSeconds()));
             vars.put("pwarp_cost", String.valueOf(warp.cost()));
             vars.put("pwarp_icon", warp.iconMaterial() == null ? org.katacr.katpa.model.PlayerWarp.DEFAULT_ICON : warp.iconMaterial());
             vars.put("pwarp_custom_data", warp.iconCustomData() == null ? "" : String.valueOf(warp.iconCustomData()));
@@ -237,6 +256,9 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
         if (warp != null) {
             vars.put("pwarp_name", warp.name());
         }
+        int existing = warp != null && plugin.warpRatingStore() != null
+                ? plugin.warpRatingStore().findRating(player.getUniqueId(), warp.id()) : 0;
+        vars.put("pwarp_rate_selected", String.valueOf(existing >= 1 && existing <= 5 ? existing : 5));
         gui.openMenu(player, "pwarp_rate", "", vars);
     }
 
@@ -247,7 +269,7 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
 
     @Override
     public void showHomeManager(Player player) {
-        gui.openMenu(player, "home_manager");
+        gui.openMenu(player, "home_selector");
     }
 
     @Override
@@ -255,8 +277,8 @@ public final class InventoryInteractionPlatform implements InteractionPlatform, 
         java.util.Map<String, String> vars = new java.util.HashMap<>();
         if (home != null) {
             vars.put("home_name", home.name());
-            vars.put("home_world", home.world());
-            vars.put("home_server", home.server());
+            vars.put("home_world", home.displayWorld());
+            vars.put("home_server", home.displayServer());
             vars.put("home_description", home.description() == null ? "" : home.description());
             vars.put("home_icon", home.iconMaterial() == null || home.iconMaterial().isBlank()
                     ? org.katacr.katpa.model.Home.DEFAULT_ICON : home.iconMaterial());

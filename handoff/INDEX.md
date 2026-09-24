@@ -1,7 +1,7 @@
 # KaTpa 交接文件索引
 
 > 项目：KaTpa —— 面向 Paper 1.21.7 / Spigot 1.21.6+、JDK 21 的玩家传送插件
-> 最后更新：2026-09-16（数据库连接失效检测、自动重连与跨 Store 串行化）
+> 最后更新：2026-09-21（`/pw`/`/pwarp admin`；排行榜缓存；PlayerPoints 创建收费；pwarp 全局冷却；移除迁移代码；编辑器更新位置；列表文本 i18n；评分点亮/提交；各模块世界黑名单）
 
 ## 项目概览
 
@@ -147,7 +147,7 @@
 > 独立于现有 warp 模块。玩家可创建属于自己的公共地标，他人可浏览/传送/评分，创建者获得传送收入（离线挂账）。
 
 **新增文件：**
-- `model/PlayerWarp.java`：record（id/ownerId/ownerName/name/server/world/x/y/z/yaw/pitch/description/icon*/cost/cooldownSeconds/createdAt）。
+- `model/PlayerWarp.java`：record（id/ownerId/ownerName/name/server/serverId/world/worldAlias/x/y/z/yaw/pitch/description/icon*/cost/createdAt）。
 - `storage/PlayerWarpStore.java`：独立表 `player_warp` + owner 二级索引 + `byOwner`/`count`/`find(ownerId,name)`。
 - `storage/WarpRatingStore.java`：评分表 `player_warp_rating`（PK player_uuid+warp_id）、离线收入表 `player_warp_pending_income`、`scoreOf` 权重（5★+10/4★+5/3★+1/2★-5/1★-10）、`leaderboard(limit)`、`addPendingIncome`/`takePendingIncome`。
 - `service/PlayerWarpService.java`：创建（数量上限 `katpa.pwarp.amount.<n>`）/传送（创建者免 cost）/编辑/评分/收入结算（在线 deposit，离线挂账）。
@@ -155,7 +155,7 @@
 - `resources/gui/`：`pwarp_selector`/`pwarp_manager`/`pwarp_editor`/`pwarp_rate`/`pwarp_leaderboard`（新增 PWARP_LIST / PWARP_LEADERBOARD 列表类型）。
 - 扩展：`KaTpaCommand`（handlePlayerWarp）、`KaTpaGuiListProvider`（buildPlayerWarps/buildPwarpLeaderboard）、`KaTpaGuiActions`（handlePlayerWarp/do rate）、`InteractionPlatform`/`InteractionService`/`InventoryInteractionPlatform`（showPwarp*）、`PlayerListener.onJoin`（领取离线收入）、`KaTpaPlugin`（模块初始化/访问器/命令注册/disable 关闭 store）。
 - `plugin.yml`：`pwarp` 命令 + 权限 `katpa.pwarp.use`/`create`/`admin`；`katpa.pwarp.amount.<n>` 动态权限。
-- `config.yml`：`modules.pwarp.*`（enabled/default-amount/default-cost/default-cooldown/name-max-length/description-max-length）。
+- `config.yml`：`modules.pwarp.*`（enabled/default-amount/total-slots/leaderboard-cache-size/create-cost/default-cost/cooldown-seconds/name-max-length/description-max-length）。
 - `lang/zh_CN.yml`：`pwarp-*` 消息键（约 30 条）。
 
 **权限模型：** `katpa.pwarp.create`（默认 true）创建；`katpa.pwarp.amount.<n>` 数量上限（默认 1）；`katpa.pwarp.admin`（OP）可编辑/删除任意玩家地标（清理违规）。
@@ -208,4 +208,90 @@
 - 模块开关 `modules.<name>.enabled`（默认 true）控制服务创建与命令注册；关闭模块注册统一 `module-disabled` 提示。
 - 存储层集中连接管理：`SettingsStore` 持有唯一 `JdbcConnectionManager`，其余 store 通过 callback 使用连接；管理器负责跨 Store 串行化、MySQL 失效检查和后续操作自动重连。
 - 所有写操作经各 store 单线程池异步落盘。
-- 消息与界面文本走 `lang/zh_CN.yml`，缺失键自动补全并写回磁盘。
+- 消息与界面文本走 `lang/zh_CN.yml`，缺失键自动补全并写回磁盘。**列表菜单条目文本也已 i18n（2026-09-21）**：`gui.list.*`（各列表类型条目名称/描述）、`gui.prompt.*`（聊天输入提示）、`gui.request-menu.*`（请求漏斗窗口）、`chat-input.*`（取消/超时）；`menu-missing` 为菜单缺失提示。菜单按钮文本仍在 `gui/*.yml`。
+## 文本/图标/外部物品能力（2026-09-18）
+
+移植 KaMenu/KaMMOUpgrade 方案，新增 `org.katacr.katpa.text` 包：`TextParser`（legacy+MiniMessage 智能解析、`&item:[x]`→sprite、`applyName/applyLore`）、`AdventureCompatibility`（旧核心无 MiniMessage 时回退）、`BukkitItemMetaCompat`（反射设置 Component 名/lore、`createInventory(Component)`、`setItemModel`）、`AdventureSender`（组件消息/actionbar，旧核心回退 legacy）、`ItemSpriteReference`、`MinecraftFeatures`、`CraftEngineResourcePackSpriteResolver`、`MaterialUtils`、`ItemPropertyReader`、`ExternalItemSpriteManager`（`item_sprites.yml` 覆盖 + 缓存 + 重载钩子）；`util/` 增 `ExternalItemUtils`（ce/ia/oraxen）、`CraftEngineUtils`（重写）、`ItemStacks`。
+
+接入点：`MessageService.component/sendComponent`、`GuiManager`（标题/`buildItem` 材质+名/lore/`translateItemColors`/`executeAction`）、`KaTpaGuiListProvider.buildIconItem`、`ItemBuilder`、`RequestHopperMenu`、`InventoryInteractionPlatform.sendActionBar`、`InventoryMenu.build` 标题；`KaTpaPlugin.onLoad` 用 Libby 挂载 adventure 4.26.1（`libraries/` 已有缓存），`onEnable` 初始化 sprite 管理器；`plugin.yml` softdepend 增 CraftEngine/ItemsAdder/Oraxen/PlaceholderAPI。
+
+依赖：`build.gradle.kts` adventure 升到 4.26.1 并新增 minimessage/key/plain。资源新增 `item_sprites.yml`。docs(zh/en) `config/config.md` 已加「文本与图标格式」节。
+
+验证：`./gradlew build` 通过；部署 Lobby 并重启，KaTpa 启用无异常、生成 `item_sprites.yml`、19 个 GUI 加载正常；`/katap reload`+`/katap help`（控制台）走新消息链路无异常。启动日志：`Adventure 来源=adventure-api-5.2.0.jar，MiniMessage=true，Sprite(1.21.9+)=true`（Paper 核心类优先于 Libby，说明 MiniMessage/字形/sprite 均可用）。**待玩家在线实测字形/图标显示。**
+
+注意：低版本（<1.21.9 或无新版 Adventure）自动降级；`&item:` 在低版本会被移除。
+
+## 2026-09-20 本批改动（1.2.1）
+
+- **世界名显示 Multiverse 别名**：新增 `util/WorldNames.java`，反射调用 Multiverse-Core API（`MultiverseCoreApi.get().getWorldManager().getWorld(name).getAliasOrName()`），有别名用别名，未装/无别名回退 Bukkit 世界名。`plugin.yml` softdepend 增 `Multiverse-Core`。接入 warp/home 列表 lore 与 `{warp_world}`/`{home_world}`、`target-world-unloaded` 消息。
+- **服务器显示别名 `server_id`**：三表含该列（见 `storage.md`），模型含 `serverId`+`displayServer()`；`CrossServerService.displayServerId()` 返回 `config.yml: server-id`。菜单/提示显示别名，跨服路由仍用真实 `server`。
+- **列表三态槽位**：`display/actions`（已有）、`empty-display/empty-actions`（已解锁空槽）、`lock-display/lock-actions`（未解锁）；`GuiListItem.Kind`（NORMAL/EMPTY/LOCK/BLANK）；`modules.home.total-slots`/`modules.pwarp.total-slots`（默认 10）。
+- **图标设置改可点击文本**：新增 `text/ClickableText.java`，用 Adventure `ClickEvent.callback`（Paper 内置回调，无指令二次确认），点按钮→关容器→发 `[此处]` 可点击提示→点后读手持物品设图标→重开编辑器。
+- **家菜单合并**：删除 `home_manager.yml`，`/home` 与 `/sethome` 无参数均打开 `home_selector`（含新建 A）。
+- **语言节点清理**：删除废弃 `ui.*`（保留 `ui.usage.*`）及 `receiver-busy`/`sneak-hint`/`database-error`/`warp-location-updated`/`pwarp-updated`/`module-*`；补齐缺失的 `*-icon-*`/`*-rename-*`/`invalid-number` 等键。
+- **Dialog 措辞清理**：注释/日志由「Dialog」改为「库存菜单」；`AcceptMode.DIALOG` 枚举与其别名保留。
+- **部署**：1.2.1 已部署 Lobby 验证（含三表 `server_id` 列迁移成功）；其余 6 台待同步。
+
+- **修复 ConfigUpdater 配置升级丢值（严重）**：`ConfigUpdater.collectValues` 递归用绝对路径 `section.get(path)` 取值，MemorySection 返回 null，导致嵌套配置叶子全部提取失败、升级时用户值被默认值覆盖（只保留 2 项）。改为相对路径 `section.get(key)` 后保留 80 项。详见 `config.md`。全部 7 台后端已从各自 `config_v2_backup_*.yml` 恢复并重新升级。
+- **右键床自动设家**：`PlayerListener.onBedInteract`（`PlayerInteractEvent` RIGHT_CLICK_BLOCK + `_BED` + 主手）→ `HomeService.setBedHome`，白天夜晚均可；内存 `lastBedHomes` 按「床头格 key」去重，重复右键同一张床不更新。配置 `modules.home.bed-home`/`bed-home-name`。详见 `services.md`。
+- **家编辑器**：`gui/home_editor.yml`（图标/更新位置/删除）；`home_selector`/`home_manager` 列表右键改为 `katpa: home edit`。新增 `HomeService.updateLocation`、`InteractionPlatform.showHomeEditor`。
+- **列表空槽位自定义**：列表按钮新增平级键 `empty-display`/`empty-actions`（结构与 `display`/`actions` 一致），作用于未使用槽位。详见 `ui.md`。
+- **按钮级 permission**：`GuiButton.permission` + `GuiManager.canView`。
+- **pwarp 删除入口**：`pwarp_editor.yml` 的 `R`（本人删除）与 `Q`（管理员强行删除，`katpa.pwarp.admin` 可见）；`pwarp_selector` 列表项右键进编辑器。
+- **部署**：1.2.1 已部署 Lobby 并重启验证；其余 6 台已于 2026-09-20 恢复配置并部署 1.2.1（详见 `/home/Server/handoff/plugin-sync.md`）。
+
+## 2026-09-21 翻页与 open 变量继承修复
+
+- **`{page}/{total_pages}` 首次渲染未替换**：`GuiManager.renderMenu` 原先在渲染循环之后才 `session.set("page"/"total_pages")`，而翻页按钮（非列表按钮）在循环内先渲染，变量尚未写入，标题/名称里原样显示 `{page}`。修复：渲染前预计算 `maxPages` 并先写入会话，再渲染所有按钮（`GuiManager.java:280`）。
+- **首/末页点击仍重算**：`KaTpaGuiActions.handlePage` 改为先算目标页，`target == current` 时直接 return，不 reopen、不重算。
+- **`open:` 动作不继承会话变量（本次用户报告）**：`pwarp_owner_list.yml` 标题 `{owner_name}` 未解析。根因：`GuiManager.executeAction` 的 `open:` 分支调用 `openMenu(player, target)`，只传菜单 id 与 `:` 后 args，**丢弃当前会话全部变量**；而 `owner_name` 仅存在于被点击列表项的 item 变量（`pwarp_players` 的 `{owner_uuid}`/`{owner_name}`）中，未进入新菜单会话。修复：`open:` 分支改为复制当前 `session.variables()` 作为 `initialVariables`，解析 `menuId:args` 后 `openMenu(player, menuId, args, inherited)`（`GuiManager.java:564`）。所有 `open:` 跳转（settings/relation_editor/pwarp_*）现均继承来源菜单变量。
+- **部署**：已构建并部署 Lobby 重启验证（`cdd8a443…`）。其余 6 台待用户验证后同步。
+
+## 2026-09-21 第二批：/pw 快捷传送、管理员指令、排行榜缓存、PlayerPoints 收费
+
+- **新增 `/pw <名称>` 快捷传送指令**：`command/PwCommand.java`，无参打开排行榜，按名传送并补全地标名；`plugin.yml` 新增 `pw` 指令（`katpa.pwarp.use`）。`/pwarp` 无参与 `/pw` 无参均改为打开排行榜（原 `pwarp_selector`）。
+- **`/pwarp admin <edit|delete|reload>`**：`PlayerWarpCommand.handleAdmin`，需 `katpa.pwarp.admin`；`edit` 打开任意地标编辑器，`delete` 强行删除，`reload` 调用 `PlayerWarpService.reloadData()`（仅重载 player_warp 数据 + 重算排行榜缓存，不动配置/语言/菜单）。新增语言键 `pwarp-admin-command-usage`/`pwarp-admin-edit-usage`/`pwarp-admin-delete-usage`/`pwarp-admin-reloaded`。
+- **排行榜缓存**：`WarpRatingStore` 新增 `LeaderboardEntry(warpId, stars, score)` 与前 N 名缓存（`leaderboard-cache-size` 默认 30）+ `leaderboardIndex`；`leaderboard(int)` 改为读缓存，新增 `cachedEntry`/`refreshLeaderboard(bool)`。`computeLeaderboard` 用**权重得分**（`scoreOf`）排序（此前 `SUM(stars)` 是按原始星数而非加权分，与展示不一致，已修正）。触发点：评分后 `rate()` 重算；创建/删除通过 `PlayerWarpStore.markLeaderboardDirty()` 在写库成功后重算（避免与写事务竞争）；跨服经 `warp_rating` 主题广播（KaProxy `DATA_SYNC_TOPICS` 增该主题）。
+- **`KaTpaGuiListProvider.buildPwarpLeaderboard`** 改用缓存（`leaderboard(0)`）渲染，不再逐条 `averageStars`/`totalScore` 查库。
+- **PlayerPoints 可选前置 + 创建收费**：新增 `util/PointsHook.java`（反射，未装安全降级），`KaTpaPlugin.points()`，`plugin.yml` softdepend 增 `PlayerPoints`。`config.yml` 新增 `modules.pwarp.create-cost.{currency,money,points}`（`money`=Vault 金币 / `points`=PlayerPoints 点券，二选一），`PlayerWarpService.chargeCreateCost` 仅在**新建**时扣费（改名/改描述等编辑不收费）。配置版本 `CURRENT_CONFIG_VERSION` 4→5。
+- **收费二次确认**：`/pw <名称>`（及菜单 `katpa: pwarp warp`）对非创建者的收费地标先发可点击消息 `pwarp-cost-confirm`（`[确定]`/`[取消]`，30s 失效）。`ClickableText` 新增多区域 `buildMulti`/`sendClickableMulti`（按 `[ ]` 文字分派回调），原单区域 `sendClickable` 保留。`PlayerWarpService.warp(player,name,confirmed)` 重载。
+- **菜单统一交互**：玩家地标列表（`pwarp_selector`/`owner_list`/`favorites`/`history`/`leaderboard`）条目统一 **左键传送 / 右键评分 / Q 收藏**；`pwarp_manager`（我的地标）保留左/右键编辑；`warp_*`（服务器地标）不涉及。**Lobby 的 `gui/` 为玩家自定义版本（CE 材质/自定义布局），改动前已逐一比对并就地编辑，未覆盖。**
+- **部署**：jar `873b15b3…` 已部署 Lobby 重启验证（配置升级 v4→v5 保留 83 项，PlayerPoints 挂载成功，18 菜单加载正常）；KaProxy 亦已构建（`warp_rating` 主题）。其余 6 台待用户验证后同步。
+
+## 2026-09-21 第三批：pwarp 全局冷却、移除迁移代码、编辑器更新位置
+
+- **pwarp 传送改全局冷却（按玩家）**：删除每个地标自己的冷却（`PlayerWarp.cooldownSeconds` 字段、`player_warp.cooldown_seconds` 列、`PlayerWarpService.setCooldown`、`/katap pwarp set cooldown` 与补全、`KaTpaGuiActions` 的 cooldown 分支、`pwarp_cooldown` 菜单变量、编辑器 C 按钮）。改为 `modules.pwarp.cooldown-seconds`（默认 30，可配，0 不冷却）的**全局按玩家**冷却：`PlayerWarpService.cooldowns` 改为 `Map<UUID, Long>`，`cooldownRemaining(player)`/`startCooldown(player)` 与具体地标无关，冷却期间该玩家不能再次 `/pwarp`/`/pw` 传送（换地标也一样）。配置版本 v5→v6。
+- **移除旧库迁移代码**：删除 `storage/ColumnMigration.java` 及三处 `ensureColumn` 调用（`server_id`/`world_alias` 直接写在 `CREATE TABLE` 中）。理由：插件未发布，无需兼容旧库。
+- **删除旧表**：`DROP TABLE katpa.player_warp`（数据未发布），插件启动时按新 schema 重建（无 `cooldown_seconds`）。
+- **pwarp 编辑器新增「更新位置」**：`pwarp_editor.yml` 的 C（冷却）改为 U（`ENDER_PEARL`，`katpa: pwarp update {pwarp_name}`）；`KaTpaGuiActions.handlePlayerWarp` 新增 `update` 分支；`PlayerWarpService.updateLocation` 以玩家当前位置覆盖坐标/世界/服务器并保留描述/图标/费用；builder 新增 `server/serverId/world/worldAlias/position` 链式方法；语言键 `pwarp-location-updated`。
+- **Lobby `gui/pwarp_editor.yml` 已就地编辑**（未覆盖玩家自定义内容）。
+- **部署**：jar `3ad54bca…` 已部署 Lobby 重启验证（配置升级 v5→v6 保留 86 项，PlayerPoints 挂载，18 菜单加载，`player_warp` 表重建为无 `cooldown_seconds`）。其余 6 台待同步。
+
+## 2026-09-21 第四批：列表文本 i18n、评分交互、创建者禁止评分
+
+- **列表条目文本全部 i18n**：`KaTpaGuiListProvider` 原先在 Java 内硬编码列表条目名称/lore（约 56 处中文），现全部改为 `plugin.messages().text("gui.list.*", vars)`。新增键：`gui.list.request.*`/`online.*`/`warp.*`/`pwarp.*`/`pwarp-owner.*`/`home.*`/`relation.*`。
+- **聊天输入提示 i18n**：`KaTpaGuiActions` 的 `chat.capture` 提示改 `gui.prompt.*`；`ChatInputManager` 的取消/超时改 `chat-input.*`；`RequestHopperMenu`（请求漏斗窗口）改 `gui.request-menu.*`；`InventoryInteractionPlatform` 的 `list_type_display` 改 `list.*`；`GuiManager` 菜单缺失提示改 `menu-missing`。
+- **移除文本依赖逻辑**：`ClickableText.HandlerResolver` 由「按区域文字」改为「按区域序号 `(index, label)`」分派；`PlayerWarpService.sendCostConfirm` 不再用 `label.contains("确定"/"取消")` 判断（该写法在语言文本被翻译/修改后会失效），改为 `index == 0`/`index == 1`。
+- **评分界面改造**：`pwarp_rate.yml` 的 5 星改为单个列表按钮 `type: PWARP_STARS`（占 5 槽），新增平级键 `lit-display`（点亮）/`unlit-display`（未点亮）；`GuiListItem.Kind` 新增 `LIT`/`UNLIT`；点 N 星左侧 N 个点亮、右侧未点亮；新增提交按钮 `S`（`katpa: pwarp do rate {pwarp_name} {pwarp_rate_selected}`），不再点击即提交；`KaTpaGuiActions` 新增 `katpa: pwarp select <n>`；`InventoryInteractionPlatform.showPwarpRate` 以玩家已有评分作为初始选择；`GuiManager.buildPlaceholderItem` 支持条目级变量（`{pwarp_star}`）。
+- **创建者禁止评分**：`PlayerWarpService.rate` 与菜单 `katpa: pwarp rate` 入口均拦截创建者自评，提示新键 `pwarp-rate-own`；排行榜/列表程序化 lore 对创建者不再显示「右键评分」。
+- **空列表不显示占位屏障**：`GuiManager.renderMenu` 列表无数据时不再插入 BARRIER 占位物品，所有列表槽位登记为 `BLANK`（不渲染、点击无动作）；删除 `emptyPlaceholder`/`renderPlaceholderSlot`；移除全部 `gui/*.yml` 的 `empty_text` 键（26 处，含 Lobby 自定义菜单）。
+- **排行榜条目补 Q 键收藏 lore**：`buildPwarpLeaderboard` 程序化 lore 增加 `[Q键] 收藏/取消收藏`。
+- **Lobby `lang/zh_CN.yml` 同步**：补齐 249 键（原磁盘 179 键），并修正 4 处陈旧值（`pwarp-command-usage`/`pwarp-set-usage`/`help.pwarp`/`help.pwarpedit`）。
+- **部署**：jar `90d0046f…` 已部署 Lobby 重启验证（18 菜单加载，无缺失语言键日志）。其余 6 台待同步。
+
+## 2026-09-21 第五批：各模块世界黑名单
+
+- **背景**：原 `modules.tpa.disabled-worlds` 仅作用于 TPA 请求；back/dback/home/warp/pwarp 不查黑名单，副本世界若仍加载则 `/back`、`/dback` 仍可进入。
+- **新增配置**：`modules.back.disabled-worlds`、`modules.dback.disabled-worlds`、`modules.warp.disabled-worlds`、`modules.home.disabled-worlds`、`modules.pwarp.disabled-worlds`（均为世界名列表，区分大小写）。配置版本 v6→v7。
+- **`TeleportService`**：`isDisabledWorld` 抽为公开 `isWorldDisabled(module, world)`；新增 `isCurrentWorldDisabled(module, player)`；`ensureTargetAvailable` 新增带 `module` 的重载，先校验目标世界黑名单（提示新键 `target-world-disabled`），再走原有代理/世界加载校验。原无 module 的重载委托之。
+- **接入点**：`BackService`/`DbackService`/`HomeService`/`WarpService`/`PlayerWarpService` 的本服与跨服 `ensureTargetAvailable` 全部传 module。
+- **阻止记录**：`BackService.recordLocation` 与 `DbackService.recordDeath` 在玩家当前世界命中黑名单时直接返回，不记录。
+- **阻止创建**：`HomeService.setHome`/`updateLocation`、`WarpService.setWarp`、`PlayerWarpService.create`/`updateLocation` 在当前世界命中黑名单时拒绝，提示新键 `world-creation-disabled`。
+- **新增语言键**：`target-world-disabled`、`world-creation-disabled`。
+- **部署**：jar `240a9185…` 已部署 Lobby 重启验证（配置升级 v6→v7 保留 87 项，6 处 `disabled-worlds` 就位）。其余 6 台待同步。
+
+## 2026-09-21 第六批：跨服 TPA 世界黑名单提前拒绝
+
+- **问题**：跨服 TPA 源服无法预知目的地世界，原先只在落点阶段（`arriveNetwork`→`canUse`）校验黑名单，导致旅行者已被切到目标服才失败、滞留目标服。
+- **修复**：`RequestService.rejectIfReceiverWorldDisabled(receiver, request)` —— 接收者当前世界命中 `modules.tpa.disabled-worlds` 时，在**接受环节**拒绝：本地请求直接拒绝并通知发送者 `target-world-disabled`，跨服请求 `network.deny` 后 `remove`；`accept()` 与 `receiveNetwork()` 白名单自动接受分支均接入。`/tpa`（目的地=接收者）与 `/tpahere`（旅行者=接收者）皆覆盖。落点阶段校验保留兜底。
+- **部署**：jar `07a474f3…` 已部署 Lobby（重启时 mcsm 状态卡住，已用 stop 触发重新启动恢复）。其余 6 台待同步。

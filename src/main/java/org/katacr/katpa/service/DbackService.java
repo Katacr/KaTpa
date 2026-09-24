@@ -23,23 +23,11 @@ public final class DbackService {
         this.plugin = plugin;
     }
 
-    /** 根据权限 katpa.dback.amount.&lt;n&gt; 返回玩家可用的死亡位置个数，无权限时取配置默认值。 */
-    public int maxSlots(Player player) {
-        int max = plugin.getConfig().getInt("modules.dback.default-amount", 1);
-        for (var perm : player.getEffectivePermissions()) {
-            String prefix = "katpa.dback.amount.";
-            if (perm.getValue() && perm.getPermission().startsWith(prefix)) {
-                try {
-                    max = Math.max(max, Integer.parseInt(perm.getPermission().substring(prefix.length())));
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-        return max;
-    }
-
-    /** 玩家死亡时记录死亡位置，按权限槽位滚动。 */
+    /** 玩家死亡时记录死亡位置（只保留最近一次），并发送可点击的返回提示；黑名单世界不记录。 */
     public void recordDeath(Player player) {
+        if (plugin.teleports().isCurrentWorldDisabled("dback", player)) {
+            return;
+        }
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
         LocationRecord record = new LocationRecord(
@@ -47,23 +35,33 @@ public final class DbackService {
                 loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch(),
                 System.currentTimeMillis());
-        plugin.backStore().addDeathLocation(player.getUniqueId(), record, maxSlots(player));
+        plugin.backStore().setDeathLocation(player.getUniqueId(), record);
+        sendDeathMessage(player, loc);
     }
 
-    /** 返回玩家全部死亡位置（0 为最近一次）。 */
-    public List<LocationRecord> deathLocations(Player player) {
-        return plugin.backStore().deathLocations(player.getUniqueId());
+    /** 发送可点击的死亡位置提示，点击后传送到该死亡位置（等价 /dback）。 */
+    private void sendDeathMessage(Player player, Location loc) {
+        String text = plugin.messages().text("dback-death-message", Map.of(
+                "world", org.katacr.katpa.util.WorldNames.display(loc.getWorld().getName()),
+                "x", Integer.toString(loc.getBlockX()),
+                "y", Integer.toString(loc.getBlockY()),
+                "z", Integer.toString(loc.getBlockZ())));
+        org.katacr.katpa.text.ClickableText.sendClickable(player, text,
+                this::dback, java.time.Duration.ofSeconds(60));
     }
 
-    /** 执行 /dback [序号]，同服直接传送，跨服通过代理。 */
-    public void dback(Player player, int slot) {
-        List<LocationRecord> records = deathLocations(player);
-        if (slot < 1 || slot > records.size()) {
-            plugin.messages().send(player, "dback-slot-missing",
-                    Map.of("count", Integer.toString(records.size())));
+    /** 返回玩家最近一次死亡位置，无记录时返回 null。 */
+    public LocationRecord deathLocation(Player player) {
+        return plugin.backStore().deathLocation(player.getUniqueId());
+    }
+
+    /** 执行 /dback，同服直接传送，跨服通过代理。 */
+    public void dback(Player player) {
+        LocationRecord record = deathLocation(player);
+        if (record == null) {
+            plugin.messages().send(player, "dback-no-location");
             return;
         }
-        LocationRecord record = records.get(slot - 1);
         if (plugin.teleports().isBusy(player.getUniqueId())) {
             plugin.messages().send(player, "teleport-busy");
             return;
@@ -78,13 +76,14 @@ public final class DbackService {
             return;
         }
         // 跨服：先校验目标子服可用，再在本服完成吟唱后请求代理切服（与 /back 行为对齐）
-        if (!plugin.teleports().ensureTargetAvailable(player, record.server(), null, null, null)) {
+        if (!plugin.teleports().ensureTargetAvailable("dback", player, record.server(), record.server(),
+                record.world(), null, null)) {
             return;
         }
         plugin.back().recordLocation(player);
         pendingDback.put(player.getUniqueId(), true);
         plugin.teleports().beginDirect(player, "dback", () -> {
-            if (!plugin.network().backRequest(player, record.server(), record, success -> {
+            if (!plugin.network().backRequest(player, record.server(), record, "dback", success -> {
                 if (!Boolean.TRUE.equals(success)) {
                     pendingDback.remove(player.getUniqueId());
                     plugin.messages().send(player, "back-failed",
@@ -99,8 +98,8 @@ public final class DbackService {
 
     /** 同服直接传送。 */
     private void teleportLocal(Player player, LocationRecord record) {
-        if (!plugin.teleports().ensureTargetAvailable(player, record.server(), record.world(),
-                "back-world-unloaded", Map.of())) {
+        if (!plugin.teleports().ensureTargetAvailable("dback", player, record.server(), record.server(),
+                record.world(), "back-world-unloaded", Map.of())) {
             return;
         }
         Location target = new Location(
@@ -118,6 +117,8 @@ public final class DbackService {
                 plugin.sounds().playAt(target, "teleport", "dback");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("dback-success", Map.of(), false));
+                org.bukkit.Bukkit.getPluginManager().callEvent(
+                        new org.katacr.katpa.api.event.KaTpaEvent(player, org.katacr.katpa.api.event.KaTpaEvent.Action.DBACK, null));
             });
         });
     }

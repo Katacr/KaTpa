@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 public final class BackStore {
     private final KaTpaPlugin plugin;
     private final ConcurrentMap<UUID, LocationRecord> lastLocations = new ConcurrentHashMap<>();
-    private final ConcurrentMap<UUID, List<LocationRecord>> deathLocations = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, LocationRecord> deathLocations = new ConcurrentHashMap<>();
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "KaTpa-Back-Database");
         thread.setDaemon(true);
@@ -141,14 +141,9 @@ public final class BackStore {
         return lastLocations.get(playerId);
     }
 
-    /** 异步写入死亡位置并更新内存列表，自动按 slot 滚动。 */
-    public void addDeathLocation(UUID playerId, LocationRecord location, int maxSlots) {
-        List<LocationRecord> current = new ArrayList<>(deathLocations.getOrDefault(playerId, List.of()));
-        current.add(0, location);
-        while (current.size() > maxSlots) {
-            current.remove(current.size() - 1);
-        }
-        deathLocations.put(playerId, List.copyOf(current));
+    /** 异步写入死亡位置（只保留最近一次，与 back 一致）并更新内存。 */
+    public void setDeathLocation(UUID playerId, LocationRecord location) {
+        deathLocations.put(playerId, location);
         executeUpdate(connection -> {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -161,21 +156,17 @@ public final class BackStore {
                 try (PreparedStatement insert = connection.prepareStatement(
                         "INSERT INTO death_location(player_id, slot, server, world, x, y, z, yaw, pitch, timestamp) " +
                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
-                    for (int slot = 0; slot < current.size(); slot++) {
-                        LocationRecord rec = current.get(slot);
-                        insert.setString(1, playerId.toString());
-                        insert.setInt(2, slot);
-                        insert.setString(3, rec.server());
-                        insert.setString(4, rec.world());
-                        insert.setDouble(5, rec.x());
-                        insert.setDouble(6, rec.y());
-                        insert.setDouble(7, rec.z());
-                        insert.setFloat(8, rec.yaw());
-                        insert.setFloat(9, rec.pitch());
-                        insert.setLong(10, rec.timestamp());
-                        insert.addBatch();
-                    }
-                    insert.executeBatch();
+                    insert.setString(1, playerId.toString());
+                    insert.setInt(2, 0);
+                    insert.setString(3, location.server());
+                    insert.setString(4, location.world());
+                    insert.setDouble(5, location.x());
+                    insert.setDouble(6, location.y());
+                    insert.setDouble(7, location.z());
+                    insert.setFloat(8, location.yaw());
+                    insert.setFloat(9, location.pitch());
+                    insert.setLong(10, location.timestamp());
+                    insert.executeUpdate();
                 }
                 connection.commit();
             } catch (SQLException | RuntimeException exception) {
@@ -191,9 +182,9 @@ public final class BackStore {
         });
     }
 
-    /** 返回玩家全部死亡位置（slot 0 为最近），内存未命中时返回空列表。 */
-    public List<LocationRecord> deathLocations(UUID playerId) {
-        return deathLocations.getOrDefault(playerId, List.of());
+    /** 返回玩家最近一次死亡位置，无记录时返回 null。 */
+    public LocationRecord deathLocation(UUID playerId) {
+        return deathLocations.get(playerId);
     }
 
     /** 玩家进入子服时从共享数据库刷新其位置数据。 */
@@ -216,7 +207,7 @@ public final class BackStore {
             List<LocationRecord> loaded = new ArrayList<>();
             try (PreparedStatement stmt = connection.prepareStatement(
                     "SELECT server, world, x, y, z, yaw, pitch, timestamp FROM death_location " +
-                            "WHERE player_id=? ORDER BY slot")) {
+                            "WHERE player_id=? ORDER BY slot LIMIT 1")) {
                 stmt.setString(1, playerId.toString());
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
@@ -227,7 +218,11 @@ public final class BackStore {
                     }
                 }
             }
-            deathLocations.put(playerId, List.copyOf(loaded));
+            if (loaded.isEmpty()) {
+                deathLocations.remove(playerId);
+            } else {
+                deathLocations.put(playerId, loaded.get(0));
+            }
         });
     }
 

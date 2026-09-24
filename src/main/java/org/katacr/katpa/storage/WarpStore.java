@@ -53,7 +53,9 @@ public final class WarpStore {
                             id VARCHAR(36) PRIMARY KEY,
                             name VARCHAR(64) NOT NULL,
                             server VARCHAR(64) NOT NULL,
+                            server_id VARCHAR(64) NOT NULL DEFAULT '',
                             world VARCHAR(128) NOT NULL,
+                            world_alias VARCHAR(128) NOT NULL DEFAULT '',
                             x DOUBLE NOT NULL,
                             y DOUBLE NOT NULL,
                             z DOUBLE NOT NULL,
@@ -76,7 +78,9 @@ public final class WarpStore {
                             id TEXT PRIMARY KEY,
                             name TEXT NOT NULL,
                             server TEXT NOT NULL,
+                            server_id TEXT NOT NULL DEFAULT '',
                             world TEXT NOT NULL,
+                            world_alias TEXT NOT NULL DEFAULT '',
                             x REAL NOT NULL,
                             y REAL NOT NULL,
                             z REAL NOT NULL,
@@ -125,7 +129,7 @@ public final class WarpStore {
             Map<String, UUID> loadedNames = new HashMap<>();
             try (var statement = connection.createStatement();
                  var rs = statement.executeQuery(
-                           "SELECT id, name, server, world, x, y, z, yaw, pitch, permission, " +
+                           "SELECT id, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, permission, " +
                                    "cooldown_seconds, cost, description, icon_material, " +
                                    "icon_custom_data, icon_item_model, created_at, updated_at FROM warp")) {
                 while (rs.next()) {
@@ -133,7 +137,9 @@ public final class WarpStore {
                             UUID.fromString(rs.getString("id")),
                             rs.getString("name"),
                             rs.getString("server"),
+                            rs.getString("server_id"),
                             rs.getString("world"),
+                            rs.getString("world_alias"),
                             rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
                             rs.getFloat("yaw"), rs.getFloat("pitch"),
                             rs.getString("permission"),
@@ -171,22 +177,24 @@ public final class WarpStore {
         nameIndex.put(warp.name().toLowerCase(Locale.ROOT), warp.id());
         executeUpdate(connection -> {
             String sql = mysql ? """
-                    INSERT INTO warp(id, name, server, world, x, y, z, yaw, pitch, permission,
+                    INSERT INTO warp(id, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, permission,
                         cooldown_seconds, cost, description, icon_material, icon_custom_data,
                         icon_item_model, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE name=VALUES(name), server=VALUES(server), world=VALUES(world),
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE name=VALUES(name), server=VALUES(server), server_id=VALUES(server_id),
+                        world=VALUES(world), world_alias=VALUES(world_alias),
                         x=VALUES(x), y=VALUES(y), z=VALUES(z), yaw=VALUES(yaw), pitch=VALUES(pitch),
                         permission=VALUES(permission), cooldown_seconds=VALUES(cooldown_seconds),
                         cost=VALUES(cost), description=VALUES(description), icon_material=VALUES(icon_material),
                         icon_custom_data=VALUES(icon_custom_data), icon_item_model=VALUES(icon_item_model),
                         updated_at=VALUES(updated_at)
                     """ : """
-                    INSERT INTO warp(id, name, server, world, x, y, z, yaw, pitch, permission,
+                    INSERT INTO warp(id, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, permission,
                         cooldown_seconds, cost, description, icon_material, icon_custom_data,
                         icon_item_model, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET name=excluded.name, server=excluded.server, world=excluded.world,
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET name=excluded.name, server=excluded.server, server_id=excluded.server_id,
+                        world=excluded.world, world_alias=excluded.world_alias,
                         x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch,
                         permission=excluded.permission, cooldown_seconds=excluded.cooldown_seconds,
                         cost=excluded.cost, description=excluded.description, icon_material=excluded.icon_material,
@@ -197,25 +205,27 @@ public final class WarpStore {
                 stmt.setString(1, warp.id().toString());
                 stmt.setString(2, warp.name());
                 stmt.setString(3, warp.server());
-                stmt.setString(4, warp.world());
-                stmt.setDouble(5, warp.x());
-                stmt.setDouble(6, warp.y());
-                stmt.setDouble(7, warp.z());
-                stmt.setFloat(8, warp.yaw());
-                stmt.setFloat(9, warp.pitch());
-                stmt.setString(10, warp.permission());
-                stmt.setInt(11, warp.cooldownSeconds());
-                stmt.setDouble(12, warp.cost());
-                stmt.setString(13, warp.description() == null ? "" : warp.description());
-                stmt.setString(14, warp.iconMaterial() == null ? "" : warp.iconMaterial());
+                stmt.setString(4, warp.serverId() == null ? "" : warp.serverId());
+                stmt.setString(5, warp.world());
+                stmt.setString(6, warp.worldAlias() == null ? "" : warp.worldAlias());
+                stmt.setDouble(7, warp.x());
+                stmt.setDouble(8, warp.y());
+                stmt.setDouble(9, warp.z());
+                stmt.setFloat(10, warp.yaw());
+                stmt.setFloat(11, warp.pitch());
+                stmt.setString(12, warp.permission());
+                stmt.setInt(13, warp.cooldownSeconds());
+                stmt.setDouble(14, warp.cost());
+                stmt.setString(15, warp.description() == null ? "" : warp.description());
+                stmt.setString(16, warp.iconMaterial() == null ? "" : warp.iconMaterial());
                 if (warp.iconCustomData() == null) {
-                    stmt.setNull(15, java.sql.Types.INTEGER);
+                    stmt.setNull(17, java.sql.Types.INTEGER);
                 } else {
-                    stmt.setInt(15, warp.iconCustomData());
+                    stmt.setInt(17, warp.iconCustomData());
                 }
-                stmt.setString(16, warp.iconItemModel() == null ? "" : warp.iconItemModel());
-                stmt.setLong(17, warp.createdAt());
-                stmt.setLong(18, warp.updatedAt());
+                stmt.setString(18, warp.iconItemModel() == null ? "" : warp.iconItemModel());
+                stmt.setLong(19, warp.createdAt());
+                stmt.setLong(20, warp.updatedAt());
                 stmt.executeUpdate();
             }
         });
@@ -250,7 +260,7 @@ public final class WarpStore {
     /** 重命名地标：复制全部字段到新名称后删除旧记录，返回新 Warp。 */
     public Warp rename(Warp warp, String newName, long now) {
         remove(warp.name());
-        Warp renamed = new Warp(warp.id(), newName, warp.server(), warp.world(),
+        Warp renamed = new Warp(warp.id(), newName, warp.server(), warp.serverId(), warp.world(), warp.worldAlias(),
                 warp.x(), warp.y(), warp.z(), warp.yaw(), warp.pitch(),
                 warp.permission(), warp.cooldownSeconds(), warp.cost(),
                 warp.description(), warp.iconMaterial(), warp.iconCustomData(), warp.iconItemModel(),

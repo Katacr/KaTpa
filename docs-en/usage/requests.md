@@ -7,7 +7,7 @@
 | `/tpa [player]` | You teleport to the other player | `/tpa Steve` |
 | `/tpahere [player]` | Invite the other player to your location | `/tpahere Alex` |
 
-Omitting the player name opens the online player dialog. When cross-server support is enabled, players on other backend servers also appear in the list.
+Omitting the player name opens the online player menu. When cross-server support is enabled, players on other backend servers also appear in the list.
 
 ## Accept or Deny
 
@@ -56,3 +56,12 @@ An Enderman teleport sound plays when the teleport completes.
 * KaTpa is disabled in the current world
 * Cross-world teleportation is disabled
 * The receiver has blacklisted you
+
+## Cross-server and dungeon worlds
+
+When the target player's world is blocked by the target server's `modules.tpa.disabled-worlds` (e.g. they are inside a dungeon), the **accept step is rejected directly on their server**, so the traveler is not switched first only to fail at the arrival stage and end up stranded on the target server.
+
+- `/tpa`: the destination is the receiver → the receiver cannot accept while standing in a blacklisted world, and both sides are notified.
+- `/tpahere`: the traveler is the receiver → the receiver (the traveler) cannot accept while standing in a blacklisted world.
+
+> This check applies on the **target server** (whoever is being teleported into, their server's config is used). A final check is still kept at the arrival stage as a fallback.

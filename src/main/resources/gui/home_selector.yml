@@ -1,12 +1,12 @@
 title: '&8KaTpa &f家'
 
 Layout:
-  - '#########'
+  - '########A'
   - '#1111111#'
   - '#1111111#'
   - '#1111111#'
   - '#1111111#'
-  - '#<####>#'
+  - '#<####>X'
 
 button:
   "#":
@@ -17,7 +17,6 @@ button:
     type: 'HOME_LIST'
     display:
       material: RED_BED
-      empty_text: '暂无家'
       name: '&a{home_name}'
       lore:
         - '&7世界: &f{home_world}'
@@ -31,6 +30,42 @@ button:
         - 'close'
       right:
         - 'katpa: home edit {home_name}'
+    # 已解锁但未使用的空槽位（结构与 display/actions 一致）：
+    empty-display:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: '&7空位 &8(未使用)'
+      lore:
+        - '&7你还可以创建新的家'
+        - '&e[左键] 创建新家'
+    empty-actions:
+      left:
+        - 'katpa: home create'
+    # 未解锁（权限不足）的锁定槽位（结构与 display/actions 一致）：
+    lock-display:
+      material: RED_STAINED_GLASS_PANE
+      name: '&c未解锁'
+      lore:
+        - '&7提升权限以解锁更多家的数量'
+    lock-actions:
+      left:
+        - 'tell: &c你的家数量上限不足，请提升权限后再试。'
+  "A":
+    display:
+      material: ANVIL
+      name: '&a新建家'
+      lore:
+        - '&7点击后输入家名称'
+        - '&e点击创建'
+    actions:
+      left:
+        - 'katpa: home create'
+  "X":
+    display:
+      material: BARRIER
+      name: '&c关闭'
+    actions:
+      left:
+        - 'close'
   "<":
     display:
       material: ARROW

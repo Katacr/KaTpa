@@ -39,6 +39,8 @@ public final class GuiManager {
     private final Map<String, GuiListProvider> listProviders = new ConcurrentHashMap<>();
     private final Map<UUID, MenuSession> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, Map<Integer, Map<String, String>>> listContexts = new ConcurrentHashMap<>();
+    /** 列表按钮各槽位的条目类型（EMPTY/LOCK），用于点击时选择 empty-actions/lock-actions。 */
+    private final Map<UUID, Map<Integer, GuiListItem.Kind>> listSlotKinds = new ConcurrentHashMap<>();
     private final Map<UUID, GuiMenuHolder> holders = new ConcurrentHashMap<>();
     private final Map<UUID, org.bukkit.scheduler.BukkitTask> refreshTasks = new ConcurrentHashMap<>();
 
@@ -57,7 +59,7 @@ public final class GuiManager {
         listProviders.put("__global__", provider);
     }
 
-    /** 重载所有菜单 YAML（从磁盘）。 */
+    /** 重载所有菜单 YAML（从磁盘，仅补齐 JAR 中磁盘缺失的菜单，不覆盖已有文件）。 */
     public void reload() {
         extractDefaultMenus();
         menuCache.clear();
@@ -94,7 +96,9 @@ public final class GuiManager {
     public void openMenu(Player player, String menuId, String args, Map<String, String> initialVariables) {
         GuiMenu menu = menuCache.get(menuId);
         if (menu == null) {
-            player.sendMessage(ChatColor.RED + "菜单不存在: " + menuId);
+            String message = ((org.katacr.katpa.KaTpaPlugin) plugin).messages()
+                    .text("menu-missing", Map.of("menu", menuId));
+            player.sendMessage(ChatColor.RED + message);
             return;
         }
         Map<String, String> vars = new HashMap<>(initialVariables);
@@ -122,10 +126,30 @@ public final class GuiManager {
         if (button == null) {
             return;
         }
+        if (!canView(player, button)) {
+            return;
+        }
         if (isListButton(button)) {
+            Map<Integer, GuiListItem.Kind> kinds = listSlotKinds.get(player.getUniqueId());
+            GuiListItem.Kind kind = kinds == null ? null : kinds.get(slot);
             Map<String, String> itemVars = listContexts.getOrDefault(player.getUniqueId(), new HashMap<>()).get(slot);
             if (itemVars != null) {
                 session.variables().putAll(itemVars);
+            }
+            if (kind == GuiListItem.Kind.BLANK) {
+                return;
+            }
+            if (kind == GuiListItem.Kind.EMPTY) {
+                for (String action : button.emptyActionsFor(clickType)) {
+                    executeAction(player, action, session);
+                }
+                return;
+            }
+            if (kind == GuiListItem.Kind.LOCK) {
+                for (String action : button.lockActionsFor(clickType)) {
+                    executeAction(player, action, session);
+                }
+                return;
             }
         }
         List<String> actions = button.actionsFor(clickType);
@@ -138,6 +162,7 @@ public final class GuiManager {
     public void handleClose(Player player) {
         sessions.remove(player.getUniqueId());
         listContexts.remove(player.getUniqueId());
+        listSlotKinds.remove(player.getUniqueId());
         holders.remove(player.getUniqueId());
         org.bukkit.scheduler.BukkitTask task = refreshTasks.remove(player.getUniqueId());
         if (task != null) {
@@ -160,12 +185,18 @@ public final class GuiManager {
         renderMenu(player, menu, session);
     }
 
+    /** 判断按钮是否对玩家可见（未配置 permission 时恒可见）。 */
+    private boolean canView(Player player, GuiMenu.GuiButton button) {
+        String permission = button.permission();
+        return permission == null || permission.isBlank() || player.hasPermission(permission);
+    }
+
     /** 判断按钮是否为列表型（由业务层提供条目数据）。 */
     private boolean isListButton(GuiMenu.GuiButton button) {
         return button.type() != null && !button.type().isBlank();
     }
 
-    /** 将 gui/ 内置 YAML 提取/覆盖到磁盘。开发期保证磁盘与 JAR 内置同步。 */
+    /** 将 JAR 内置 gui/ YAML 补齐到磁盘（仅当磁盘文件不存在时写入，不覆盖已有文件）。 */
     private void extractDefaultMenus() {
         File dir = new File(plugin.getDataFolder(), "gui");
         if (!dir.exists() && !dir.mkdirs()) {
@@ -173,7 +204,7 @@ public final class GuiManager {
             return;
         }
         for (String name : listBundledMenus()) {
-            plugin.saveResource("gui/" + name, true);
+            plugin.saveResource("gui/" + name, false);
         }
     }
 
@@ -220,7 +251,7 @@ public final class GuiManager {
 
     /** 渲染菜单库存并打开给玩家；若玩家已持有同一菜单则原地更新不重开。 */
     private void renderMenu(Player player, GuiMenu menu, MenuSession session) {
-        String title = ChatColor.translateAlternateColorCodes('&', resolveText(player, menu.title(), session));
+        net.kyori.adventure.text.Component titleComponent = org.katacr.katpa.text.TextParser.parse(resolveText(player, menu.title(), session));
         int rows = menu.layout().size();
         int size = Math.max(9, Math.min(54, rows * 9));
 
@@ -237,13 +268,44 @@ public final class GuiManager {
             inplace = true;
         } else {
             existing = new GuiMenuHolder(menu, session);
-            inv = Bukkit.createInventory(existing, size, title);
+            inv = org.katacr.katpa.text.BukkitItemMetaCompat.createInventoryComponent(existing, size, titleComponent);
+            if (inv == null) {
+                inv = Bukkit.createInventory(existing, size, org.katacr.katpa.text.TextParser.toLegacy(titleComponent));
+            }
             existing.bind(inv);
             holders.put(player.getUniqueId(), existing);
         }
 
         Map<Integer, Map<String, String>> slotContexts = new HashMap<>();
         GuiListProvider provider = listProviders.get("__global__");
+
+        // 预计算总页数并写入会话，确保非列表按钮（翻页按钮）渲染时 {page}/{total_pages} 已就绪。
+        int maxPages = 1;
+        if (provider != null) {
+            BukkitPlayer bp = new BukkitPlayer(player);
+            Map<String, Integer> perPageByChar = new HashMap<>();
+            for (String line : menu.layout()) {
+                for (int c = 0; c < line.length() && c < 9; c++) {
+                    String ch = String.valueOf(line.charAt(c));
+                    if (" ".equals(ch)) {
+                        continue;
+                    }
+                    GuiMenu.GuiButton b = menu.buttons().get(ch);
+                    if (b != null && isListButton(b)) {
+                        perPageByChar.merge(ch, 1, Integer::sum);
+                    }
+                }
+            }
+            for (Map.Entry<String, Integer> e : perPageByChar.entrySet()) {
+                GuiMenu.GuiButton b = menu.buttons().get(e.getKey());
+                if (e.getValue() > 0) {
+                    int pages = (int) Math.ceil((double) Math.max(totalCount(bp, b.type(), session), 1) / e.getValue());
+                    maxPages = Math.max(maxPages, pages);
+                }
+            }
+        }
+        session.set("page", String.valueOf(session.page() + 1));
+        session.set("total_pages", String.valueOf(maxPages));
 
         // 收集列表型按钮的字符与槽位
         Map<String, List<Integer>> listSlotsByChar = new HashMap<>();
@@ -256,6 +318,9 @@ public final class GuiManager {
                 }
                 GuiMenu.GuiButton button = menu.buttons().get(ch);
                 if (button == null) {
+                    continue;
+                }
+                if (!canView(player, button)) {
                     continue;
                 }
                 int slot = r * 9 + c;
@@ -272,7 +337,7 @@ public final class GuiManager {
         }
 
         // 填充列表型按钮
-        int maxPages = 1;
+        Map<Integer, GuiListItem.Kind> slotKinds = new HashMap<>();
         if (provider != null) {
             BukkitPlayer bp = new BukkitPlayer(player);
             for (Map.Entry<String, List<Integer>> entry : listSlotsByChar.entrySet()) {
@@ -280,24 +345,43 @@ public final class GuiManager {
                 int perPage = entry.getValue().size();
                 List<GuiListItem> items = provider.provide(bp, button.type(), session, session.page(), perPage);
                 List<Integer> slots = entry.getValue();
-                if (perPage > 0) {
-                    int pages = (int) Math.ceil((double) Math.max(totalCount(bp, button.type(), session), 1) / perPage);
-                    maxPages = Math.max(maxPages, pages);
-                }
-                if (items.isEmpty() && !slots.isEmpty()) {
-                    inv.setItem(slots.get(0), emptyPlaceholder(button));
+                if (items.isEmpty()) {
+                    // 无列表数据时不渲染任何占位物品，且点击不执行任何动作。
+                    for (int slot : slots) {
+                        slotKinds.put(slot, GuiListItem.Kind.BLANK);
+                    }
                     continue;
                 }
                 for (int i = 0; i < slots.size() && i < items.size(); i++) {
                     int slot = slots.get(i);
                     GuiListItem item = items.get(i);
-                    inv.setItem(slot, translateItemColors(item.item()));
-                    slotContexts.put(slot, item.variables());
+                    GuiListItem.Kind kind = item.kind() == null ? GuiListItem.Kind.NORMAL : item.kind();
+                    ItemStack rendered = item.item();
+                    if (kind == GuiListItem.Kind.EMPTY) {
+                        rendered = buildPlaceholderItem(player, session, button.emptyDisplay());
+                    } else if (kind == GuiListItem.Kind.LOCK) {
+                        rendered = buildPlaceholderItem(player, session, button.lockDisplay());
+                    } else if (kind == GuiListItem.Kind.LIT) {
+                        rendered = buildPlaceholderItem(player, session, button.litDisplay(), item.variables());
+                    } else if (kind == GuiListItem.Kind.UNLIT) {
+                        rendered = buildPlaceholderItem(player, session, button.unlitDisplay(), item.variables());
+                    }
+                    if (rendered != null) {
+                        inv.setItem(slot, translateItemColors(rendered));
+                    }
+                    if (item.variables() != null && !item.variables().isEmpty()) {
+                        slotContexts.put(slot, item.variables());
+                    }
+                    if (kind != GuiListItem.Kind.NORMAL) {
+                        slotKinds.put(slot, kind);
+                    }
+                }
+                // 列表条目不足的剩余槽位按“空白填充”处理：不渲染、点击不执行任何动作。
+                for (int i = items.size(); i < slots.size(); i++) {
+                    slotKinds.put(slots.get(i), GuiListItem.Kind.BLANK);
                 }
             }
         }
-        session.set("page", String.valueOf(session.page() + 1));
-        session.set("total_pages", String.valueOf(maxPages));
 
         if (!inplace) {
             scheduleRefresh(player, menu, session);
@@ -305,23 +389,48 @@ public final class GuiManager {
             // openInventory 触发 close 事件会清空会话，打开后重新注册
             sessions.put(player.getUniqueId(), session);
             listContexts.put(player.getUniqueId(), slotContexts);
+            listSlotKinds.put(player.getUniqueId(), slotKinds);
         } else {
             // 原地更新不触发 close，直接刷新会话与上下文
             sessions.put(player.getUniqueId(), session);
             listContexts.put(player.getUniqueId(), slotContexts);
+            listSlotKinds.put(player.getUniqueId(), slotKinds);
         }
     }
 
-    /** 列表为空时展示的占位物品（书名由按钮 name 或默认"暂无内容"决定）。 */
-    private ItemStack emptyPlaceholder(GuiMenu.GuiButton button) {
-        ItemStack item = new ItemStack(Material.BARRIER);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            String label = button.display() != null ? button.display().getString("empty_text", "") : "";
-            meta.setDisplayName("§7" + (label.isEmpty() ? "暂无内容" : label));
-            item.setItemMeta(meta);
+    /** 按给定 display 配置构建占位物品（颜色码翻译），未配置返回 null。 */
+    private ItemStack buildPlaceholderItem(Player player, MenuSession session, ConfigurationSection display) {
+        return buildPlaceholderItem(player, session, display, null);
+    }
+
+    /**
+     * 按给定 display 配置构建占位物品（颜色码翻译），未配置返回 null。
+     *
+     * <p>{@code extraVariables} 为条目级变量（如 {@code {pwarp_star}}），临时并入会话供文本替换。
+     */
+    private ItemStack buildPlaceholderItem(Player player, MenuSession session, ConfigurationSection display,
+                                           Map<String, String> extraVariables) {
+        if (display == null) {
+            return null;
         }
-        return item;
+        ItemStack item;
+        if (extraVariables == null || extraVariables.isEmpty()) {
+            item = buildItem(player, display, session);
+        } else {
+            Map<String, String> previous = new HashMap<>();
+            for (Map.Entry<String, String> entry : extraVariables.entrySet()) {
+                previous.put(entry.getKey(), session.variables().put(entry.getKey(), entry.getValue()));
+            }
+            item = buildItem(player, display, session);
+            for (Map.Entry<String, String> entry : previous.entrySet()) {
+                if (entry.getValue() == null) {
+                    session.variables().remove(entry.getKey());
+                } else {
+                    session.variables().put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        return item == null ? null : translateItemColors(item);
     }
 
     /** 翻译列表条目物品的名称与描述颜色代码（克隆后处理，避免修改提供器内部对象）。 */
@@ -332,15 +441,11 @@ public final class GuiManager {
         ItemMeta meta = stack.getItemMeta();
         boolean changed = false;
         if (meta.hasDisplayName()) {
-            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', meta.getDisplayName()));
+            org.katacr.katpa.text.TextParser.applyName(meta, meta.getDisplayName());
             changed = true;
         }
         if (meta.hasLore()) {
-            List<String> colored = new java.util.ArrayList<>();
-            for (String line : meta.getLore()) {
-                colored.add(ChatColor.translateAlternateColorCodes('&', line));
-            }
-            meta.setLore(colored);
+            org.katacr.katpa.text.TextParser.applyLore(meta, meta.getLore());
             changed = true;
         }
         if (!changed) {
@@ -389,28 +494,25 @@ public final class GuiManager {
         if (display == null) {
             return new ItemStack(Material.STONE);
         }
-        String materialName = resolveText(player, display.getString("material", "STONE"), session).toUpperCase();
-        Material material = Material.getMaterial(materialName);
-        if (material == null) {
-            material = Material.STONE;
-        }
+        String materialName = resolveText(player, display.getString("material", "STONE"), session);
         int amount = Math.max(1, Math.min(64, display.getInt("amount", 1)));
-        ItemStack item = new ItemStack(material, amount);
+        ItemStack item = org.katacr.katpa.util.ItemStacks.resolve(materialName, player, Material.STONE);
+        item.setAmount(amount);
         ItemMeta meta = item.getItemMeta();
         if (meta == null) {
             return item;
         }
         String name = display.getString("name", "");
         if (!name.isEmpty()) {
-            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', resolveText(player, name, session)));
+            org.katacr.katpa.text.TextParser.applyName(meta, resolveText(player, name, session));
         }
         List<String> lore = display.getStringList("lore");
         if (!lore.isEmpty()) {
             List<String> resolved = new java.util.ArrayList<>();
             for (String line : lore) {
-                resolved.add(ChatColor.translateAlternateColorCodes('&', resolveText(player, line, session)));
+                resolved.add(resolveText(player, line, session));
             }
-            meta.setLore(resolved);
+            org.katacr.katpa.text.TextParser.applyLore(meta, resolved);
         }
         if (display.contains("custom_model_data")) {
             meta.setCustomModelData(display.getInt("custom_model_data"));
@@ -427,12 +529,12 @@ public final class GuiManager {
         if (display.contains("item_model")) {
             String model = resolveText(player, display.getString("item_model"), session);
             if (model != null && !model.isBlank()) {
-                KaTpaGuiListProvider.setItemModelReflect(meta, model);
+                org.katacr.katpa.text.BukkitItemMetaCompat.setItemModel(meta, model);
             }
         }
         if (display.contains("skull_owner") && meta instanceof SkullMeta skull) {
-            String owner = display.getString("skull_owner");
-            if (owner != null) {
+            String owner = resolveText(player, display.getString("skull_owner"), session);
+            if (owner != null && !owner.isBlank()) {
                 skull.setOwningPlayer(Bukkit.getOfflinePlayer(owner));
             }
         }
@@ -460,11 +562,17 @@ public final class GuiManager {
         if (action == null || action.isBlank()) {
             return;
         }
-        String resolved = ChatColor.translateAlternateColorCodes('&',
-                resolveText(player, action, session));
+        String raw = resolveText(player, action, session);
+        String resolved = ChatColor.translateAlternateColorCodes('&', raw);
         if (resolved.startsWith("open:")) {
             String target = resolved.substring(5).trim();
-            Bukkit.getScheduler().runTask(plugin, () -> openMenu(player, target));
+            Map<String, String> inherited = new HashMap<>(session.variables());
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                String[] parts = target.split(":", 2);
+                String menuId = parts[0];
+                String targetArgs = parts.length > 1 ? parts[1] : "";
+                openMenu(player, menuId, targetArgs, inherited);
+            });
             return;
         }
         if (resolved.equals("close")) {
@@ -472,12 +580,11 @@ public final class GuiManager {
             return;
         }
         if (resolved.startsWith("tell:")) {
-            player.sendMessage(resolved.substring(5).trim());
+            org.katacr.katpa.text.AdventureSender.sendMessage(player, org.katacr.katpa.text.TextParser.parse(raw.substring(5).trim()));
             return;
         }
         if (resolved.startsWith("actionbar:")) {
-            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
-                    net.md_5.bungee.api.chat.TextComponent.fromLegacyText(resolved.substring(10).trim()));
+            org.katacr.katpa.text.AdventureSender.sendActionBar(player, org.katacr.katpa.text.TextParser.parse(raw.substring(10).trim()));
             return;
         }
         if (resolved.startsWith("command:")) {

@@ -19,7 +19,6 @@ button:
       material: '{pwarp_icon}'
       custom_data: '{pwarp_custom_data}'
       item_model: '{pwarp_item_model}'
-      empty_text: '你还没有地标，点击 A 新建'
       name: '&a{pwarp_name}'
       lore:
         - '&7描述: &f{pwarp_description}'
@@ -33,6 +32,25 @@ button:
         - 'katpa: pwarp edit {pwarp_name}'
       right:
         - 'katpa: pwarp edit {pwarp_name}'
+    # 已解锁但未使用的空槽位（结构与 display/actions 一致）：
+    empty-display:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: '&7空位 &8(未使用)'
+      lore:
+        - '&7你还可以创建新的玩家地标'
+        - '&e[左键] 创建新地标'
+    empty-actions:
+      left:
+        - 'katpa: pwarp create'
+    # 未解锁（权限不足）的锁定槽位（结构与 display/actions 一致）：
+    lock-display:
+      material: RED_STAINED_GLASS_PANE
+      name: '&c未解锁'
+      lore:
+        - '&7提升权限以解锁更多地标数量'
+    lock-actions:
+      left:
+        - 'tell: &c你的地标数量上限不足，请提升权限后再试。'
   "A":
     display:
       material: ANVIL

@@ -1,6 +1,6 @@
 # Personal Settings
 
-Open the settings dialog with:
+Open the settings menu with:
 
 ```text
 /tpasetting
@@ -12,7 +12,7 @@ The main screen lets you select a request response mode and displays the number 
 
 ### Dialog
 
-Opens a native dialog when a request arrives. Multiple requests are listed separately with accept and deny actions.
+Opens a menu window when a request arrives. Multiple requests are listed separately with accept and deny actions.
 
 ### Clickable Chat
 

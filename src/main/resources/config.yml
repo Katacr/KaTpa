@@ -1,5 +1,5 @@
 # 配置文件版本，请勿手动修改。插件启动时自动检测并升级旧版配置。
-config-version: 3
+config-version: 7
 
 # 交互音效定义。sound 使用 Minecraft 注册表键。各模块可通过 modules.<模块>.sounds 控制是否启用。
 sounds:
@@ -65,6 +65,8 @@ modules:
     # 同一世界内发生传送时，若新位置与旧位置距离小于该值（格），
     # 则忽略本次返回点记录（避免短距离传送覆盖原有的 /back 位置）；设为 0 表示始终记录。
     min-distance: 16
+    # 禁止返回的世界名称，区分大小写；在此类世界中也不会记录 /back 位置。
+    disabled-worlds: []
   # 返回死亡位置（/dback）。
   dback:
     enabled: true
@@ -72,8 +74,8 @@ modules:
     warmup-seconds: 3
     sounds: true
     particles: true
-    # 无 katpa.dback.amount.<n> 权限时的默认死亡位置保存数量。
-    default-amount: 1
+    # 禁止返回的世界名称，区分大小写；在此类世界中也不会记录死亡位置。
+    disabled-worlds: []
   # 公共地标传送（/warp、/setwarp、/delwarp）。
   warp:
     enabled: true
@@ -81,6 +83,8 @@ modules:
     warmup-seconds: 3
     sounds: true
     particles: true
+    # 禁止传送到的世界名称，区分大小写；在此类世界中也不允许创建/更新地标。
+    disabled-worlds: []
     # 新建地标的默认权限节点，留空表示无限制。
     default-permission: ""
     # 新建地标的默认冷却秒数。
@@ -100,6 +104,8 @@ modules:
     particles: true
     # 无 katpa.home.amount.<n> 权限时的默认家数量上限。
     default-amount: 1
+    # 家列表展示的总槽位数（已有家 + 已解锁空槽 + 未解锁锁定槽）；权限上限超出该值时可创建但不在列表展示锁定槽。
+    total-slots: 10
     # 玩家右键床时自动创建/覆盖该名称的家（白天夜晚均可）；重复右键同一张床不会重复更新，换床才会更新。
     bed-home: true
     # 右键床自动创建的家名称。
@@ -108,6 +114,8 @@ modules:
     name-max-length: 32
     # 家描述最大长度（聊天输入设置描述时校验）。
     description-max-length: 100
+    # 禁止传送到的世界名称，区分大小写；在此类世界中也不允许创建/更新家。
+    disabled-worlds: []
   # 玩家创建的公共地标（/pwarp、/katap pwarp）。
   pwarp:
     enabled: true
@@ -117,14 +125,25 @@ modules:
     particles: true
     # 无 katpa.pwarp.amount.<n> 权限时的默认创建数量上限。
     default-amount: 1
+    # 玩家地标列表展示的总槽位数（已有地标 + 已解锁空槽 + 未解锁锁定槽）。
+    total-slots: 10
+    # 排行榜缓存容量（前 N 名），创建/删除/评分或 /pwarp admin reload 时重算。
+    leaderboard-cache-size: 30
+    # 新建玩家地标的一次性费用。currency 为 money（Vault 金币）或 points（PlayerPoints 点券）；金额为 0 不收费。
+    create-cost:
+      currency: money
+      money: 0
+      points: 0
     # 新建玩家地标的默认传送费用（需要 Vault 经济插件）。
     default-cost: 0
-    # 新建玩家地标的默认冷却秒数。
-    default-cooldown: 0
+    # 玩家地标传送冷却秒数（每个玩家独立计时）；冷却期间该玩家不能再次使用 /pwarp 传送。0 表示不冷却。
+    cooldown-seconds: 30
     # 玩家地标名称最大长度（聊天输入重命名/创建时校验）。
     name-max-length: 32
     # 玩家地标描述最大长度（聊天输入设置描述时校验）。
     description-max-length: 100
+    # 禁止传送到的世界名称，区分大小写；在此类世界中也不允许创建/更新玩家地标。
+    disabled-worlds: []
 
 # 使用 plugins/KaTpa/lang 下的语言文件名（不含 .yml）。
 language: zh_CN

@@ -55,14 +55,19 @@ public final class ChatInputManager implements Listener {
         event.setCancelled(true);
         String message = event.getMessage().trim();
         if ("cancel".equalsIgnoreCase(message)) {
-            event.getPlayer().sendMessage("§c已取消输入。");
+            event.getPlayer().sendMessage(text("chat-input.cancelled"));
             return;
         }
         if (System.currentTimeMillis() > input.expiresAt()) {
-            event.getPlayer().sendMessage("§c输入已超时。");
+            event.getPlayer().sendMessage(text("chat-input.timeout"));
             return;
         }
         Bukkit.getScheduler().runTask(plugin, () -> input.callback().accept(event.getPlayer(), message));
+    }
+
+    /** 通过插件语言服务读取文本。 */
+    private String text(String key) {
+        return ((org.katacr.katpa.KaTpaPlugin) plugin).messages().text(key);
     }
 
     /** 玩家离线时清理待输入状态。 */

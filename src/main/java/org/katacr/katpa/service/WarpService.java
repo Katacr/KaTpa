@@ -54,6 +54,10 @@ public final class WarpService {
 
     /** 管理员创建或更新地标。 */
     public boolean setWarp(Player player, String name) {
+        if (plugin.teleports().isCurrentWorldDisabled("warp", player)) {
+            plugin.messages().send(player, "world-creation-disabled");
+            return false;
+        }
         if (name.isBlank()) {
             plugin.messages().send(player, "warp-name-empty");
             return false;
@@ -65,11 +69,14 @@ public final class WarpService {
         }
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
+        String serverId = plugin.network().displayServerId();
+        String world = loc.getWorld().getName();
+        String worldAlias = org.katacr.katpa.util.WorldNames.display(world);
         Warp existing = plugin.warpStore().find(name);
         long now = System.currentTimeMillis();
         Warp warp = new Warp(
                 existing != null ? existing.id() : java.util.UUID.randomUUID(),
-                name, server, loc.getWorld().getName(),
+                name, server, serverId, world, worldAlias,
                 loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch(),
                 existing != null ? existing.permission()
@@ -129,8 +136,10 @@ public final class WarpService {
         if (warp == null) return;
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
-        plugin.warpStore().save(rebuild(warp, b -> b.server(server)
-                .world(loc.getWorld().getName())
+        String serverId = plugin.network().displayServerId();
+        String world = loc.getWorld().getName();
+        plugin.warpStore().save(rebuild(warp, b -> b.server(server).serverId(serverId)
+                .world(world).worldAlias(org.katacr.katpa.util.WorldNames.display(world))
                 .x(loc.getX()).y(loc.getY()).z(loc.getZ())
                 .yaw(loc.getYaw()).pitch(loc.getPitch())));
     }
@@ -188,8 +197,8 @@ public final class WarpService {
 
     /** 同服地标传送。 */
     private void teleportLocal(Player player, Warp warp) {
-        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), warp.world(),
-                "warp-world-unloaded", Map.of("name", warp.name()))) {
+        if (!plugin.teleports().ensureTargetAvailable("warp", player, warp.server(), warp.displayServer(),
+                warp.world(), "warp-world-unloaded", Map.of("name", warp.name()))) {
             return;
         }
         Location target = new Location(
@@ -208,13 +217,16 @@ public final class WarpService {
                 plugin.sounds().playAt(target, "teleport", "warp");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("warp-success", Map.of("name", warp.name()), false));
+                org.bukkit.Bukkit.getPluginManager().callEvent(
+                        new org.katacr.katpa.api.event.KaTpaEvent(player, org.katacr.katpa.api.event.KaTpaEvent.Action.WARP, warp.name()));
             });
         });
     }
 
     /** 跨服地标传送：先完成源服吟唱，再请求代理切服并在目标服落点。 */
     private void teleportCrossServer(Player player, Warp warp) {
-        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), null, null, null)) {
+        if (!plugin.teleports().ensureTargetAvailable("warp", player, warp.server(), warp.displayServer(),
+                warp.world(), null, null)) {
             return;
         }
         plugin.back().recordLocation(player);
@@ -223,7 +235,7 @@ public final class WarpService {
                 warp.server(), warp.world(), warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch(), System.currentTimeMillis());
         plugin.teleports().beginDirect(player, "warp", () -> {
-            if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
+            if (!plugin.network().backRequest(player, warp.server(), loc, "warp", success -> {
                 if (!Boolean.TRUE.equals(success)) {
                     plugin.messages().send(player, "warp-failed",
                             Map.of("reason", plugin.messages().text("network-reason.connect-failed")));
@@ -267,7 +279,9 @@ public final class WarpService {
         private final java.util.UUID id;
         private final String name;
         private String server;
+        private String serverId;
         private String world;
+        private String worldAlias;
         private double x, y, z;
         private float yaw, pitch;
         private String permission;
@@ -284,7 +298,9 @@ public final class WarpService {
             this.id = warp.id();
             this.name = warp.name();
             this.server = warp.server();
+            this.serverId = warp.serverId();
             this.world = warp.world();
+            this.worldAlias = warp.worldAlias();
             this.x = warp.x();
             this.y = warp.y();
             this.z = warp.z();
@@ -309,7 +325,9 @@ public final class WarpService {
         WarpBuilder iconCustomData(Integer v) { this.iconCustomData = v; return this; }
         WarpBuilder iconItemModel(String v) { this.iconItemModel = v; return this; }
         WarpBuilder server(String v) { this.server = v; return this; }
+        WarpBuilder serverId(String v) { this.serverId = v; return this; }
         WarpBuilder world(String v) { this.world = v; return this; }
+        WarpBuilder worldAlias(String v) { this.worldAlias = v; return this; }
         WarpBuilder x(double v) { this.x = v; return this; }
         WarpBuilder y(double v) { this.y = v; return this; }
         WarpBuilder z(double v) { this.z = v; return this; }
@@ -317,7 +335,7 @@ public final class WarpService {
         WarpBuilder pitch(float v) { this.pitch = v; return this; }
 
         Warp build() {
-            return new Warp(id, name, server, world, x, y, z, yaw, pitch,
+            return new Warp(id, name, server, serverId, world, worldAlias, x, y, z, yaw, pitch,
                     permission, cooldownSeconds, cost, description,
                     iconMaterial, iconCustomData, iconItemModel, createdAt, updatedAt);
         }

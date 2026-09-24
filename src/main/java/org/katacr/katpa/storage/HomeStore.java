@@ -49,7 +49,9 @@ public final class HomeStore {
                             owner_id VARCHAR(36) NOT NULL,
                             name VARCHAR(64) NOT NULL,
                             server VARCHAR(64) NOT NULL,
+                            server_id VARCHAR(64) NOT NULL DEFAULT '',
                             world VARCHAR(128) NOT NULL,
+                            world_alias VARCHAR(128) NOT NULL DEFAULT '',
                             x DOUBLE NOT NULL,
                             y DOUBLE NOT NULL,
                             z DOUBLE NOT NULL,
@@ -69,7 +71,9 @@ public final class HomeStore {
                             owner_id TEXT NOT NULL,
                             name TEXT NOT NULL,
                             server TEXT NOT NULL,
+                            server_id TEXT NOT NULL DEFAULT '',
                             world TEXT NOT NULL,
+                            world_alias TEXT NOT NULL DEFAULT '',
                             x REAL NOT NULL,
                             y REAL NOT NULL,
                             z REAL NOT NULL,
@@ -93,7 +97,7 @@ public final class HomeStore {
             var loaded = new ConcurrentHashMap<String, Home>();
             var index = new ConcurrentHashMap<String, UUID>();
             try (PreparedStatement stmt = connection.prepareStatement(
-                    "SELECT id, name, server, world, x, y, z, yaw, pitch, description, " +
+                    "SELECT id, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, description, " +
                             "icon_material, icon_custom_data, icon_item_model, created_at FROM home WHERE owner_id=?")) {
                 stmt.setString(1, ownerId.toString());
                 try (ResultSet rs = stmt.executeQuery()) {
@@ -101,7 +105,7 @@ public final class HomeStore {
                         Home home = new Home(
                                 UUID.fromString(rs.getString("id")),
                                 ownerId, rs.getString("name"),
-                                rs.getString("server"), rs.getString("world"),
+                                rs.getString("server"), rs.getString("server_id"), rs.getString("world"), rs.getString("world_alias"),
                                 rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
                                 rs.getFloat("yaw"), rs.getFloat("pitch"),
                                 rs.getString("description"),
@@ -127,18 +131,20 @@ public final class HomeStore {
                 .put(home.name().toLowerCase(Locale.ROOT), home.id());
         executeUpdate(connection -> {
             String sql = mysql ? """
-                    INSERT INTO home(id, owner_id, name, server, world, x, y, z, yaw, pitch, description,
+                    INSERT INTO home(id, owner_id, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, description,
                         icon_material, icon_custom_data, icon_item_model, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE name=VALUES(name), server=VALUES(server), world=VALUES(world),
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE name=VALUES(name), server=VALUES(server), server_id=VALUES(server_id),
+                        world=VALUES(world), world_alias=VALUES(world_alias),
                         x=VALUES(x), y=VALUES(y), z=VALUES(z), yaw=VALUES(yaw), pitch=VALUES(pitch),
                         description=VALUES(description), icon_material=VALUES(icon_material),
                         icon_custom_data=VALUES(icon_custom_data), icon_item_model=VALUES(icon_item_model)
                     """ : """
-                    INSERT INTO home(id, owner_id, name, server, world, x, y, z, yaw, pitch, description,
+                    INSERT INTO home(id, owner_id, name, server, server_id, world, world_alias, x, y, z, yaw, pitch, description,
                         icon_material, icon_custom_data, icon_item_model, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET name=excluded.name, server=excluded.server, world=excluded.world,
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET name=excluded.name, server=excluded.server, server_id=excluded.server_id,
+                        world=excluded.world, world_alias=excluded.world_alias,
                         x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch,
                         description=excluded.description, icon_material=excluded.icon_material,
                         icon_custom_data=excluded.icon_custom_data, icon_item_model=excluded.icon_item_model
@@ -148,21 +154,23 @@ public final class HomeStore {
                 stmt.setString(2, home.ownerId().toString());
                 stmt.setString(3, home.name());
                 stmt.setString(4, home.server());
-                stmt.setString(5, home.world());
-                stmt.setDouble(6, home.x());
-                stmt.setDouble(7, home.y());
-                stmt.setDouble(8, home.z());
-                stmt.setFloat(9, home.yaw());
-                stmt.setFloat(10, home.pitch());
-                stmt.setString(11, home.description() == null ? "" : home.description());
-                stmt.setString(12, home.iconMaterial() == null ? "" : home.iconMaterial());
+                stmt.setString(5, home.serverId() == null ? "" : home.serverId());
+                stmt.setString(6, home.world());
+                stmt.setString(7, home.worldAlias() == null ? "" : home.worldAlias());
+                stmt.setDouble(8, home.x());
+                stmt.setDouble(9, home.y());
+                stmt.setDouble(10, home.z());
+                stmt.setFloat(11, home.yaw());
+                stmt.setFloat(12, home.pitch());
+                stmt.setString(13, home.description() == null ? "" : home.description());
+                stmt.setString(14, home.iconMaterial() == null ? "" : home.iconMaterial());
                 if (home.iconCustomData() == null) {
-                    stmt.setNull(13, java.sql.Types.INTEGER);
+                    stmt.setNull(15, java.sql.Types.INTEGER);
                 } else {
-                    stmt.setInt(13, home.iconCustomData());
+                    stmt.setInt(15, home.iconCustomData());
                 }
-                stmt.setString(14, home.iconItemModel() == null ? "" : home.iconItemModel());
-                stmt.setLong(15, home.createdAt());
+                stmt.setString(16, home.iconItemModel() == null ? "" : home.iconItemModel());
+                stmt.setLong(17, home.createdAt());
                 stmt.executeUpdate();
             }
         });

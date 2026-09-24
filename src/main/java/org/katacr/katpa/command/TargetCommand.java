@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** 处理 /tpa 与 /tpahere 的目标查找及无参数 Dialog 选择。 */
+/** 处理 /tpa 与 /tpahere 的目标查找及无参数菜单选择。 */
 public final class TargetCommand implements CommandExecutor, TabCompleter {
     private final KaTpaPlugin plugin;
     private final RequestType type;

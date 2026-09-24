@@ -52,15 +52,15 @@ Records the player's location before the last teleport (single entry).
 
 | Placeholder | Description |
 | --- | --- |
-| `%katpa_dback_<n>%` | Full info of the n-th death location, comma-separated |
-| `%katpa_dback_<n>_location%` | Brief location, comma-separated: `world,x,y,z` (no server or rotation) |
-| `%katpa_dback_<n>_server%` | Server ID |
-| `%katpa_dback_<n>_world%` | World name |
-| `%katpa_dback_<n>_x%` | X coordinate |
-| `%katpa_dback_<n>_y%` | Y coordinate |
-| `%katpa_dback_<n>_z%` | Z coordinate |
-| `%katpa_dback_<n>_yaw%` | Yaw |
-| `%katpa_dback_<n>_pitch%` | Pitch |
+| `%katpa_dback%` | Full info of the most recent death location, comma-separated |
+| `%katpa_dback_location%` | Brief location, comma-separated: `world,x,y,z` (no server or rotation) |
+| `%katpa_dback_server%` | Server ID |
+| `%katpa_dback_world%` | World name |
+| `%katpa_dback_x%` | X coordinate |
+| `%katpa_dback_y%` | Y coordinate |
+| `%katpa_dback_z%` | Z coordinate |
+| `%katpa_dback_yaw%` | Yaw |
+| `%katpa_dback_pitch%` | Pitch |
 
 ## General
 

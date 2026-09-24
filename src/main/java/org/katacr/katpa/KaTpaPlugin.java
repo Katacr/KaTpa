@@ -14,6 +14,7 @@ import org.katacr.katpa.command.ResponseCommand;
 import org.katacr.katpa.command.SettingsCommand;
 import org.katacr.katpa.command.HomeCommand;
 import org.katacr.katpa.command.PlayerWarpCommand;
+import org.katacr.katpa.command.PwCommand;
 import org.katacr.katpa.command.SetHomeCommand;
 import org.katacr.katpa.command.SetWarpCommand;
 import org.katacr.katpa.command.TargetCommand;
@@ -40,6 +41,8 @@ import org.katacr.katpa.storage.WarpRatingStore;
 import org.katacr.katpa.storage.WarpStore;
 import org.katacr.katpa.ui.InteractionService;
 import org.katacr.katpa.util.ConfigUpdater;
+import org.katacr.katpa.text.ExternalItemSpriteManager;
+import org.katacr.katpa.text.TextParser;
 import org.katacr.katpa.util.MessageService;
 
 import java.io.File;
@@ -47,6 +50,7 @@ import java.io.File;
 /** KaTpa 插件入口，负责组装服务、注册指令监听器并管理资源生命周期。 */
 public final class KaTpaPlugin extends JavaPlugin {
     private MessageService messages;
+    private ExternalItemSpriteManager spriteManager;
     private SettingsStore settings;
     private BackStore backStore;
     private SoundService sounds;
@@ -66,6 +70,7 @@ public final class KaTpaPlugin extends JavaPlugin {
     private PwarpMetaStore pwarpMetaStore;
     private PlayerWarpService playerWarp;
     private Economy economy;
+    private org.katacr.katpa.util.PointsHook points;
 
     /** 在插件启用前通过 Libby 下载并挂载 SQLite JDBC 运行时依赖。 */
     @Override
@@ -80,6 +85,7 @@ public final class KaTpaPlugin extends JavaPlugin {
         BukkitLibraryManager libraryManager = new BukkitLibraryManager(this, librariesDirectory.getAbsolutePath());
         libraryManager.addMavenCentral();
         libraryManager.addRepository("https://maven.aliyun.com/repository/public");
+        loadAdventureLibraries(libraryManager);
         if (getConfig().getString("storage.type", "sqlite").equalsIgnoreCase("mysql")) {
             Library mariaDb = Library.builder()
                     .groupId("org{}mariadb{}jdbc")
@@ -99,6 +105,35 @@ public final class KaTpaPlugin extends JavaPlugin {
         }
     }
 
+    /** 通过 Libby 挂载 Adventure 运行库（Spigot/旧核心需要；Paper 已有则由核心提供）。 */
+    private void loadAdventureLibraries(BukkitLibraryManager libraryManager) {
+        String[][] libraries = {
+                {"net{}kyori", "adventure-api", "4.26.1"},
+                {"net{}kyori", "adventure-key", "4.26.1"},
+                {"net{}kyori", "adventure-text-minimessage", "4.26.1"},
+                {"net{}kyori", "adventure-text-serializer-legacy", "4.26.1"},
+                {"net{}kyori", "adventure-text-serializer-plain", "4.26.1"},
+                {"net{}kyori", "adventure-text-serializer-gson", "4.26.1"},
+                {"net{}kyori", "adventure-text-serializer-json", "4.26.1"},
+                {"net{}kyori", "adventure-text-serializer-commons", "4.26.1"},
+                {"net{}kyori", "examination-api", "1.3.0"},
+                {"net{}kyori", "examination-string", "1.3.0"},
+                {"net{}kyori", "option", "1.1.0"}
+        };
+        for (String[] entry : libraries) {
+            libraryManager.loadLibrary(Library.builder()
+                    .groupId(entry[0])
+                    .artifactId(entry[1])
+                    .version(entry[2])
+                    .build());
+        }
+    }
+
+    /** 返回物品 Sprite（{@code &item:[...]}）管理器。 */
+    public ExternalItemSpriteManager spriteManager() {
+        return spriteManager;
+    }
+
     /** 初始化配置、SQLite 数据、业务服务和 Bukkit 注册项。 */
     @Override
     public void onEnable() {
@@ -107,6 +142,20 @@ public final class KaTpaPlugin extends JavaPlugin {
             reloadConfig();
         }
         messages = new MessageService(this);
+        spriteManager = new ExternalItemSpriteManager(this);
+        spriteManager.init();
+        TextParser.setSpriteResolver(spriteManager::resolveTag);
+        String adventureSource = "未知";
+        try {
+            java.security.CodeSource source = net.kyori.adventure.text.Component.class.getProtectionDomain().getCodeSource();
+            if (source != null && source.getLocation() != null) {
+                adventureSource = new File(source.getLocation().toURI()).getName();
+            }
+        } catch (Throwable ignored) {
+        }
+        getLogger().info("Adventure 来源=" + adventureSource
+                + "，MiniMessage=" + org.katacr.katpa.text.AdventureCompatibility.supportsMiniMessage()
+                + "，Sprite(1.21.9+)=" + org.katacr.katpa.text.MinecraftFeatures.supportsSpriteObjects());
         settings = new SettingsStore(this);
         try {
             settings.initialize();
@@ -186,6 +235,13 @@ public final class KaTpaPlugin extends JavaPlugin {
             playerWarp = new PlayerWarpService(this);
         }
         setupEconomy();
+        this.points = new org.katacr.katpa.util.PointsHook();
+        if (points.available()) {
+            getLogger().info("已挂载 PlayerPoints 点券接口。");
+        }
+        if (warpRatingStore != null) {
+            warpRatingStore.refreshLeaderboard(false);
+        }
         registerCommands();
         registerPlaceholders();
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
@@ -194,7 +250,7 @@ public final class KaTpaPlugin extends JavaPlugin {
                 .filter(this::moduleEnabled)
                 .toList();
         getLogger().info("KaTpa 已启用：" + interactions.platformName()
-                + " Dialog、聊天交互、双击潜行和 SQLite 设置已就绪。");
+                + " 库存菜单、聊天交互、双击潜行和 SQLite 设置已就绪。");
         getLogger().info("已启用模块：" + (enabledModules.isEmpty() ? "无" : String.join(", ", enabledModules)));
     }
 
@@ -241,6 +297,26 @@ public final class KaTpaPlugin extends JavaPlugin {
         return messages;
     }
 
+    /**
+     * 重载配置、语言与界面资源（gui/ 菜单定义），并重启跨服网络通道。
+     *
+     * <p>{@code /katap reload} 与 {@code /tpasetting reload} 共用此入口，确保模块配置、
+     * 语言文本与菜单编辑全部生效。
+     */
+    public void reloadAll() {
+        if (network != null) {
+            network.shutdown();
+        }
+        reloadConfig();
+        messages.reload();
+        if (interactions != null) {
+            interactions.reload();
+        }
+        if (network != null) {
+            network.initialize();
+        }
+    }
+
     /** 返回玩家设置和名单存储。 */
     public SettingsStore settings() {
         return settings;
@@ -266,7 +342,7 @@ public final class KaTpaPlugin extends JavaPlugin {
         return requests;
     }
 
-    /** 返回 Dialog 和聊天界面服务。 */
+    /** 返回库存菜单与聊天交互界面服务。 */
     public InteractionService interactions() {
         return interactions;
     }
@@ -336,6 +412,11 @@ public final class KaTpaPlugin extends JavaPlugin {
         return economy;
     }
 
+    /** 返回 PlayerPoints 点券接口，未安装时仍返回不可用实例（各方法安全降级）。 */
+    public org.katacr.katpa.util.PointsHook points() {
+        return points;
+    }
+
     /** 返回指定功能模块是否在配置中启用。 */
     public boolean moduleEnabled(String module) {
         return getConfig().getBoolean("modules." + module + ".enabled", true);
@@ -391,7 +472,6 @@ public final class KaTpaPlugin extends JavaPlugin {
         if (moduleEnabled("dback")) {
             DbackCommand dbackCommand = new DbackCommand(this);
             command("dback").setExecutor(dbackCommand);
-            command("dback").setTabCompleter(dbackCommand);
         } else {
             disabledCommand("dback");
         }
@@ -425,8 +505,11 @@ public final class KaTpaPlugin extends JavaPlugin {
             PlayerWarpCommand pwarpCommand = new PlayerWarpCommand(this);
             command("pwarp").setExecutor(pwarpCommand);
             command("pwarp").setTabCompleter(pwarpCommand);
+            PwCommand pwCommand = new PwCommand(this);
+            command("pw").setExecutor(pwCommand);
+            command("pw").setTabCompleter(pwCommand);
         } else {
-            disabledCommand("pwarp");
+            disabledCommand("pwarp", "pw");
         }
     }
 

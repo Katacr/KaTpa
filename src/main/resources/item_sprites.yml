@@ -1,0 +1,23 @@
+# KaMMOUpgrade 自定义物品 Sprite 覆盖
+# KaMMOUpgrade custom item Sprite overrides
+# 需要服务端 Minecraft 1.21.9 或更高版本。
+# Requires a server running Minecraft 1.21.9 or newer.
+#
+# 用于文本里的 `&item:[物品]` 内联图标：
+# 会自动解析原版材质，以及 ItemsAdder / Oraxen / CraftEngine 物品的二维纹理。
+# 仅当物品使用复杂模型或专用 GUI 图标、自动解析不正确时，才需要在此添加覆盖。
+# Used by the `&item:[item]` inline icon:
+# vanilla materials and ItemsAdder / Oraxen / CraftEngine textures are resolved automatically.
+# Add an override only when an item uses a complex model or a dedicated GUI icon.
+#
+# 简写 / Short form：
+# sprites:
+#   'ce:custom:chair': 'blocks:custom:item/chair_icon'
+#
+# 完整写法 / Full form：
+# sprites:
+#   'oraxen:complex_staff':
+#     atlas: 'minecraft:blocks'
+#     sprite: 'oraxen:item/complex_staff_icon'
+
+sprites: {}

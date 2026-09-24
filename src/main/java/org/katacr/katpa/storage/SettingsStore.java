@@ -145,7 +145,7 @@ public final class SettingsStore {
         });
     }
 
-    /** 返回玩家当前接受模式，未设置时使用 Dialog。 */
+    /** 返回玩家当前接受模式，未设置时使用弹窗式（DIALOG）。 */
     public AcceptMode mode(UUID playerId) {
         return modes.getOrDefault(playerId, AcceptMode.DIALOG);
     }

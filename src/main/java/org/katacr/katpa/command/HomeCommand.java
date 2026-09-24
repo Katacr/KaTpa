@@ -21,7 +21,7 @@ public final class HomeCommand implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
-    /** 无参数时打开家选择 Dialog，有参数时传送到指定家。 */
+    /** 无参数时打开家选择菜单，有参数时传送到指定家。 */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {

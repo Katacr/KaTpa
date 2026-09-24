@@ -19,24 +19,9 @@ In cross-server mode, if the previous location is on another backend, KaProxy au
 
 ```text
 /dback
-/dback 1
-/dback 2
 ```
 
-Without a slot number, returns to the most recent death location. With a slot number, returns to the corresponding death location, starting from 1 (1 = most recent).
-
-### Number of Death Locations
-
-By default, 1 death location can be saved. Grant the following permissions through a permission plugin to increase the limit:
-
-| Permission | Saved locations |
-| --- | --- |
-| `katpa.dback.amount.1` | 1 (default) |
-| `katpa.dback.amount.3` | 3 |
-| `katpa.dback.amount.5` | 5 |
-| `katpa.dback.amount.10` | 10 |
-
-When a player holds multiple such permissions, the highest value is used. New death locations are added to the front of the list; locations exceeding the limit are automatically removed from the back.
+Returns to the most recent death location (only the latest one is kept, same as `/back`). On death, the player receives a clickable message "Your death location is ... [Click] to return"; clicking it returns there without typing a command.
 
 ## Cross-Server Return
 
@@ -47,3 +32,10 @@ When `proxy.enabled` is on, `/back` and `/dback` can return across servers. The 
 3. After the player arrives at the target backend, KaTpa teleports the player to the exact coordinates.
 
 Cross-server return requires the KaProxy Back module to be enabled.
+
+## World Blacklist
+
+`modules.back.disabled-worlds` / `modules.dback.disabled-worlds` in `config.yml` list **world names that cannot be returned to** (case-sensitive, e.g. dungeon worlds):
+
+- If the destination world is blacklisted, `/back` and `/dback` are rejected with a notice.
+- While a player is **inside** a blacklisted world, no `/back` or death location is recorded, so no stale return point remains after the dungeon ends.

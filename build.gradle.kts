@@ -20,8 +20,11 @@ dependencies {
     // 共享运行时以最旧公开 Bukkit API 为编译基准，保证 1.16.5 兼容。
     compileOnly("org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT")
     // Adventure 仅编译期可见；运行时 Paper 1.16.5 内置，Spigot 由 Libby 挂载。
-    compileOnly("net.kyori:adventure-api:4.23.0")
-    compileOnly("net.kyori:adventure-text-serializer-legacy:4.23.0")
+    compileOnly("net.kyori:adventure-api:4.26.1")
+    compileOnly("net.kyori:adventure-key:4.26.1")
+    compileOnly("net.kyori:adventure-text-minimessage:4.26.1")
+    compileOnly("net.kyori:adventure-text-serializer-legacy:4.26.1")
+    compileOnly("net.kyori:adventure-text-serializer-plain:4.26.1")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
         exclude(group = "org.bukkit")
     }

@@ -6,7 +6,7 @@ Layout:
   - '#1111111#'
   - '#1111111#'
   - '#1111111#'
-  - '#B#######'
+  - '<###B###>'
 
 button:
   "#":
@@ -19,7 +19,6 @@ button:
       material: '{pwarp_icon}'
       custom_data: '{pwarp_custom_data}'
       item_model: '{pwarp_item_model}'
-      empty_text: '暂无排行数据'
       name: '&a#{pwarp_rank} {pwarp_name}'
       lore:
         - '&7创建者: &f{pwarp_owner}'
@@ -29,12 +28,15 @@ button:
         - ''
         - '&a[左键] 传送'
         - '&e[右键] 评分'
+        - '&e[Q键] 收藏/取消'
     actions:
       left:
-        - 'command: pwarp {pwarp_name}'
+        - 'katpa: pwarp warp {pwarp_name}'
         - 'close'
       right:
         - 'katpa: pwarp rate {pwarp_name}'
+      drop:
+        - 'katpa: pwarp favorite {pwarp_name}'
   "B":
     display:
       material: ARROW
@@ -44,3 +46,17 @@ button:
     actions:
       left:
         - 'open: pwarp_selector'
+  "<":
+    display:
+      material: ARROW
+      name: '&a上一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page prev'
+  ">":
+    display:
+      material: ARROW
+      name: '&a下一页 &7({page}/{total_pages})'
+    actions:
+      left:
+        - 'katpa: page next'

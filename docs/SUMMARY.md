@@ -16,4 +16,5 @@
      * [指令](perm/commands.md)
      * [权限](perm/permissions.md)
 * [PlaceholderAPI 占位符](placeholders.md)
+* [API 事件](api.md)
 * [常见问题](faq.md)

@@ -18,7 +18,6 @@ button:
     display:
       material: PLAYER_HEAD
       skull_owner: '{member_name}'
-      empty_text: '名单暂无成员'
       name: '&a{member_name}'
       lore:
         - '&7点击从名单中移除'

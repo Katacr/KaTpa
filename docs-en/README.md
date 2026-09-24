@@ -4,9 +4,9 @@ description: KaTpa - Simple and intuitive player teleport requests
 
 # Home
 
-> Handle player teleport requests with native dialogs, chat buttons, or double-sneak controls.
+> Handle player teleport requests with inventory menus, chat buttons, or double-sneak controls.
 
-**KaTpa** lets players request a teleport to another player or invite another player to teleport to them. Players do not need to remember complex arguments: running `/tpa` or `/tpahere` opens a dialog containing the online player list.
+**KaTpa** lets players request a teleport to another player or invite another player to teleport to them. Players do not need to remember complex arguments: running `/tpa` or `/tpahere` opens a menu containing the online player list.
 
 ## Main Features
 
@@ -32,7 +32,7 @@ description: KaTpa - Simple and intuitive player teleport requests
 | Paper | 1.21.7 or a newer compatible version |
 | Spigot | 1.21.6 or a newer compatible version |
 
-Paper is recommended for the most complete native dialog experience.
+Paper is recommended for the most complete feature experience.
 
 ## 📖 Next Steps
 

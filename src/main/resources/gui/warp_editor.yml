@@ -64,7 +64,7 @@ button:
       item_model: '{warp_item_model}'
       name: '&a图标: &f{warp_icon}'
       lore:
-        - '&7手持物品点击设置图标'
+        - '&7点击后关闭菜单，手持物品再点聊天栏 [此处]'
         - '&e点击设置'
     actions:
       left:

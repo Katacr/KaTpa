@@ -3,9 +3,9 @@ title: '&8KaTpa &f编辑玩家地标: &f{pwarp_name}'
 Layout:
   - '#########'
   - '#  N D  #'
-  - '#  C F  #'
+  - '#  U F  #'
   - '#  I X  #'
-  - '####X####'
+  - '#R#####Q#'
 
 button:
   "#":
@@ -30,15 +30,16 @@ button:
     actions:
       left:
         - 'katpa: pwarp set desc {pwarp_name}'
-  "C":
+  "U":
     display:
-      material: CLOCK
-      name: '&a冷却: &f{pwarp_cooldown}秒'
+      material: ENDER_PEARL
+      name: '&a更新位置'
       lore:
-        - '&e点击修改冷却时间'
+        - '&7将地标位置更新为你当前所在位置'
+        - '&e点击更新'
     actions:
       left:
-        - 'katpa: pwarp set cooldown {pwarp_name}'
+        - 'katpa: pwarp update {pwarp_name}'
   "F":
     display:
       material: EMERALD
@@ -55,11 +56,34 @@ button:
       item_model: '{pwarp_item_model}'
       name: '&a图标: &f{pwarp_icon}'
       lore:
-        - '&7手持物品点击设置图标'
+        - '&7点击后关闭菜单，手持物品再点聊天栏 [此处]'
         - '&e点击设置'
     actions:
       left:
         - 'katpa: pwarp icon {pwarp_name}'
+  "R":
+    display:
+      material: TNT
+      name: '&c删除地标'
+      lore:
+        - '&7删除你自己创建的玩家地标 &f{pwarp_name}'
+        - '&c此操作不可撤销'
+        - '&e[左键] 删除'
+    actions:
+      left:
+        - 'katpa: pwarp delete {pwarp_name}'
+  "Q":
+    permission: 'katpa.pwarp.admin'
+    display:
+      material: BARRIER
+      name: '&4管理员强行删除'
+      lore:
+        - '&7强制删除玩家地标 &f{pwarp_name}'
+        - '&c无视创建者，此操作不可撤销'
+        - '&e[左键] 强行删除'
+    actions:
+      left:
+        - 'katpa: pwarp delete {pwarp_name}'
   "X":
     display:
       material: BARRIER

@@ -19,7 +19,6 @@ button:
       material: '{pwarp_icon}'
       custom_data: '{pwarp_custom_data}'
       item_model: '{pwarp_item_model}'
-      empty_text: '暂无玩家地标'
       name: '&a{pwarp_name}'
       lore:
         - '&7创建者: &f{pwarp_owner}'
@@ -28,13 +27,24 @@ button:
         - '&7评分: &f{pwarp_stars}★ &7({pwarp_score}分)'
         - ''
         - '&a[左键] 传送'
+        - '&e[右键] 评分'
         - '&e[Q键] 收藏/取消'
     actions:
       left:
-        - 'command: pwarp {pwarp_name}'
+        - 'katpa: pwarp warp {pwarp_name}'
         - 'close'
+      right:
+        - 'katpa: pwarp rate {pwarp_name}'
       drop:
         - 'katpa: pwarp favorite {pwarp_name}'
+    # 列表未使用槽位的展示物品（可选，结构与 display 一致；取消注释启用）：
+    # empty-display:
+    #   material: LIGHT_GRAY_STAINED_GLASS_PANE
+    #   name: '&8空位'
+    # 列表未使用槽位被点击时的动作（可选，结构与 actions 一致）：
+    # empty-actions:
+    #   left:
+    #     - 'tell: &7这是空槽位'
   "B":
     display:
       material: ANVIL

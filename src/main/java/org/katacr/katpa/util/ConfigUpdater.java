@@ -12,7 +12,7 @@ import java.util.Map;
 
 /** 启动时检查配置文件版本，自动备份旧版并合并用户自定义值到新默认配置。 */
 public final class ConfigUpdater {
-    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final int CURRENT_CONFIG_VERSION = 7;
     private static final String CONFIG_VERSION_KEY = "config-version";
 
     private ConfigUpdater() {

@@ -89,6 +89,12 @@ public final class CrossServerService implements PluginMessageListener {
         return plugin.getConfig().getString("server-id", "local");
     }
 
+    /** 返回用于展示的服务器别名（取自 config.yml 的 server-id），未配置时回退真实标识。 */
+    public String displayServerId() {
+        String configured = plugin.getConfig().getString("server-id", "");
+        return configured == null || configured.isBlank() ? serverId() : configured;
+    }
+
     /** 返回是否已经收到 KaProxy 的有效在线玩家快照。 */
     public boolean available() {
         return enabled() && available && System.currentTimeMillis() - lastPresenceAt <= 90_000L;
@@ -151,6 +157,9 @@ public final class CrossServerService implements PluginMessageListener {
         }
         if (plugin.playerWarpStore() != null) {
             plugin.playerWarpStore().reload();
+        }
+        if (plugin.warpRatingStore() != null) {
+            plugin.warpRatingStore().refreshLeaderboard(false);
         }
     }
 
@@ -245,8 +254,20 @@ public final class CrossServerService implements PluginMessageListener {
     /** 请求代理将玩家切服并传送到指定位置。 */
     public boolean backRequest(Player player, String targetServer, LocationRecord location,
                                Consumer<Boolean> callback) {
+        return backRequest(player, targetServer, location, "back", callback);
+    }
+
+    /**
+     * 发起跨服落点请求。
+     *
+     * @param actionType 动作类型（home / warp / player_warp / back / dback），随请求发往代理，
+     *                   抵达目标服后原样回传，用于区分并触发对应的 KaTpaEvent。
+     */
+    public boolean backRequest(Player player, String targetServer, LocationRecord location,
+                               String actionType, Consumer<Boolean> callback) {
         boolean sent = send(player, "back", "back_request", output -> {
             output.writeUTF(targetServer);
+            output.writeUTF(actionType == null ? "back" : actionType);
             writeLocation(output, location);
         });
         if (!sent) {
@@ -366,6 +387,14 @@ public final class CrossServerService implements PluginMessageListener {
                 if (plugin.playerWarpStore() != null) {
                     plugin.playerWarpStore().reload();
                 }
+                if (plugin.warpRatingStore() != null) {
+                    plugin.warpRatingStore().refreshLeaderboard(false);
+                }
+            }
+            case "warp_rating" -> {
+                if (plugin.warpRatingStore() != null) {
+                    plugin.warpRatingStore().refreshLeaderboard(false);
+                }
             }
             default -> plugin.getLogger().fine("忽略未知数据同步主题: " + topic);
         }
@@ -393,8 +422,9 @@ public final class CrossServerService implements PluginMessageListener {
     private void handleBack(Player carrier, String action, DataInputStream input) throws IOException {
         switch (action) {
             case "back_arrival" -> {
+                String actionType = input.readUTF();
                 LocationRecord location = readLocation(input);
-                plugin.back().handleArrival(carrier, location);
+                plugin.back().handleArrival(carrier, location, actionType);
             }
             case "back_failed" -> {
                 String reason = input.readUTF();

@@ -57,3 +57,7 @@ When `proxy.enabled` is on, warp teleportation works across servers. If the targ
 ## Vault Economy
 
 Warp costs are optional. When Vault and a compatible economy plugin are installed, the cost is automatically deducted on teleport. Without Vault, cost settings are ignored and players teleport for free.
+
+## World Blacklist
+
+`modules.warp.disabled-worlds` in `config.yml` lists **world names that cannot be teleported to** (case-sensitive). `/warp` is rejected when the destination world is blacklisted, and creating/updating a warp via `/setwarp` is blocked while the player stands in a blacklisted world.

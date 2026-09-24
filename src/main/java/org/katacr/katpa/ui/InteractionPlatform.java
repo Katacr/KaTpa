@@ -13,10 +13,10 @@ import org.katacr.katpa.model.Warp;
 import java.util.UUID;
 
 /**
- * 隔离 KaTpa 交互界面与具体服务器核心的 Dialog API。
+ * 隔离 KaTpa 交互界面与具体服务器核心的菜单 API。
  *
- * 接口只暴露 Bukkit 与 KaTpa 自身类型，避免 Spigot 在加载共享代码时解析 Paper 专属的 Dialog 类；
- * Paper 与 Spigot 各自实现渲染，业务逻辑仍统一留在 RequestService 与 SettingsStore。
+ * 接口只暴露 Bukkit 与 KaTpa 自身类型，避免 Spigot 在加载共享代码时解析 Paper 专属的菜单类；
+ * 具体渲染由 Inventory 实现，业务逻辑仍统一留在 RequestService 与 SettingsStore。
  */
 public interface InteractionPlatform {
     /** 初始化平台实现所需的监听器与运行时状态。 */
@@ -34,7 +34,7 @@ public interface InteractionPlatform {
     /** 打开待处理请求列表，并记录需要在请求变化时接收更新的玩家。 */
     void showRequestList(Player receiver);
 
-    /** 请求发生增删后，仅在列表已打开时直接推送最新 Dialog。 */
+    /** 请求发生增删后，仅在列表已打开时直接推送最新菜单。 */
     void refreshRequestList(Player receiver);
 
     /** 停止指定玩家后续接收请求列表变化推送。 */
@@ -49,13 +49,13 @@ public interface InteractionPlatform {
     /** 显示某一名单的现有成员、快捷移除入口和添加成员按钮。 */
     void showRelationEditor(Player player, ListType type);
 
-    /** 显示地标选择 Dialog，列出玩家可用地标。 */
+    /** 显示地标选择菜单，列出玩家可用地标。 */
     void showWarpSelector(Player player);
 
-    /** 显示管理员地标管理 Dialog。 */
+    /** 显示管理员地标管理菜单。 */
     void showWarpManager(Player player);
 
-    /** 显示单个地标编辑 Dialog。 */
+    /** 显示单个地标编辑菜单。 */
     void showWarpEditor(Player player, Warp warp);
 
     /** 显示玩家地标选择列表（全局所有玩家地标）。 */
@@ -64,20 +64,32 @@ public interface InteractionPlatform {
     /** 显示玩家自己的地标管理列表。 */
     void showPwarpManager(Player player);
 
+    /** 显示玩家地标排行榜。 */
+    void showPwarpLeaderboard(Player player);
+
+    /** 显示玩家收藏的玩家地标列表。 */
+    void showPwarpFavorites(Player player);
+
+    /** 显示玩家传送历史记录。 */
+    void showPwarpHistory(Player player);
+
     /** 显示单个玩家地标编辑界面。 */
     void showPwarpEditor(Player player, org.katacr.katpa.model.PlayerWarp warp);
 
     /** 显示玩家地标评分界面。 */
     void showPwarpRate(Player player, org.katacr.katpa.model.PlayerWarp warp);
 
-    /** 显示玩家个人家选择 Dialog，列出玩家的全部家。 */
+    /** 显示玩家个人家选择菜单，列出玩家的全部家。 */
     void showHomeSelector(Player player);
 
-    /** 显示玩家个人家管理 Dialog，列出全部家并提供创建和删除入口。 */
+    /** 显示玩家个人家管理菜单，列出全部家并提供创建和删除入口。 */
     void showHomeManager(Player player);
 
     /** 显示单个家的编辑界面（图标 / 更新位置 / 删除）。 */
     void showHomeEditor(Player player, Home home);
+
+    /** 重新加载界面资源（如 gui/ 菜单定义）。 */
+    void reload();
 
     /** 插件关闭时释放平台实现持有的状态。 */
     void shutdown();

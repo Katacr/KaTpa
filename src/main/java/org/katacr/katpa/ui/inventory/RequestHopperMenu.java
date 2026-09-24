@@ -34,9 +34,14 @@ public final class RequestHopperMenu extends InventoryMenu {
 
     @Override
     protected String title() {
-        String typeDisplay = request.type() == RequestType.TPA_HERE
-                ? "邀请你前往" : "请求前往你";
-        return ChatColor.DARK_GRAY + "KaTpa " + ChatColor.WHITE + typeDisplay;
+        String key = request.type() == RequestType.TPA_HERE
+                ? "gui.list.request.type-tpahere" : "gui.list.request.type-tpa";
+        return ChatColor.DARK_GRAY + "KaTpa " + ChatColor.WHITE + katpa().messages().text(key);
+    }
+
+    /** 返回插件实例以读取语言文本。 */
+    private KaTpaPlugin katpa() {
+        return (KaTpaPlugin) plugin;
     }
 
     @Override
@@ -47,10 +52,14 @@ public final class RequestHopperMenu extends InventoryMenu {
 
     @Override
     protected void render() {
-        ItemStack accept = simple(Material.GREEN_STAINED_GLASS_PANE, "&a&l接受",
-                List.of("&7点击接受 &f" + senderName, "&7的传送请求"));
-        ItemStack reject = simple(Material.RED_STAINED_GLASS_PANE, "&c&l拒绝",
-                List.of("&7点击拒绝 &f" + senderName, "&7的传送请求"));
+        ItemStack accept = simple(Material.GREEN_STAINED_GLASS_PANE,
+                katpa().messages().text("gui.request-menu.accept"),
+                List.of(katpa().messages().text("gui.request-menu.accept-lore",
+                        java.util.Map.of("sender", senderName))));
+        ItemStack reject = simple(Material.RED_STAINED_GLASS_PANE,
+                katpa().messages().text("gui.request-menu.deny"),
+                List.of(katpa().messages().text("gui.request-menu.deny-lore",
+                        java.util.Map.of("sender", senderName))));
         ItemStack frame = simple(Material.GRAY_STAINED_GLASS_PANE, " ", null);
 
         // 漏斗外形：槽位 2,3 绿(接受) | 4 头颅 | 5,6 红(拒绝)，其余为边框
@@ -84,13 +93,9 @@ public final class RequestHopperMenu extends InventoryMenu {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', name));
+            org.katacr.katpa.text.TextParser.applyName(meta, name);
             if (lore != null && !lore.isEmpty()) {
-                List<String> colored = new java.util.ArrayList<>();
-                for (String line : lore) {
-                    colored.add(ChatColor.translateAlternateColorCodes('&', line));
-                }
-                meta.setLore(colored);
+                org.katacr.katpa.text.TextParser.applyLore(meta, lore);
             }
             item.setItemMeta(meta);
         }
@@ -103,10 +108,10 @@ public final class RequestHopperMenu extends InventoryMenu {
         ItemMeta meta = item.getItemMeta();
         if (meta instanceof SkullMeta skull) {
             skull.setOwningPlayer(Bukkit.getOfflinePlayer(ownerName));
-            skull.setDisplayName(ChatColor.GREEN + ownerName);
-            skull.setLore(List.of(
-                    ChatColor.GRAY + "向你发送了传送请求",
-                    ChatColor.GRAY + "左键接受 / 右键拒绝"));
+            org.katacr.katpa.text.TextParser.applyName(skull, ChatColor.GREEN + ownerName);
+            org.katacr.katpa.text.TextParser.applyLore(skull, List.of(
+                    katpa().messages().text("gui.request-menu.skull-lore-1"),
+                    katpa().messages().text("gui.request-menu.skull-lore-2")));
             item.setItemMeta(skull);
         }
         return item;

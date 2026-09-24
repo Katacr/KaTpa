@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** 处理接受模式、名单维护、设置 Dialog 与管理员配置重载。 */
+/** 处理接受模式、名单维护、设置菜单与管理员配置重载。 */
 public final class SettingsCommand implements CommandExecutor, TabCompleter {
     private final KaTpaPlugin plugin;
 
@@ -38,8 +38,7 @@ public final class SettingsCommand implements CommandExecutor, TabCompleter {
                 plugin.messages().send(sender, "no-permission");
                 return true;
             }
-            plugin.reloadConfig();
-            plugin.messages().reload();
+            plugin.reloadAll();
             plugin.messages().send(sender, "config-reloaded");
             return true;
         }

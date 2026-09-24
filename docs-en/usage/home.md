@@ -9,7 +9,7 @@ Each player can set their own home locations and teleport to them using `/home`.
 /home <name>
 ```
 
-Without a name, opens a home selection dialog listing all available homes. With a name, teleports directly to the specified home.
+Without a name, opens a home selection menu listing all available homes. With a name, teleports directly to the specified home.
 
 Right-clicking a home in the list opens that home's editor, where you can change its icon, update its location, or delete it (see "Home Editor" below). Each home can have a description and icon configured (via the home management GUI):
 
@@ -18,11 +18,21 @@ Right-clicking a home in the list opens that home's editor, where you can change
 
 ## Home Editor
 
-Right-clicking a home in the home list (`/home` or the `/sethome` management dialog) opens the home editor with three functions:
+Right-clicking a home in the home list (`/home` or the `/sethome` management menu) opens the home editor with three functions:
 
 * **Icon**: Hold any item in your hand and click the "Icon" button to set it as the home icon.
 * **Update location**: Updates the home location to the player's current position (keeps description and icon).
 * **Delete**: Deletes this home.
+
+## Bed Respawn Home
+
+Right-clicking a bed automatically creates or overwrites a home named `重生点` (at the player's position when right-clicking). This works both day and night:
+
+* If a `重生点` home already exists, its location is overwritten (its description and icon are kept).
+* Right-clicking the **same bed** again does not update it; only a different bed updates the location.
+* If the home limit is reached and no `重生点` home exists yet, the limit message is shown.
+
+Controlled by `modules.home.bed-home` (enabled by default); the home name is set by `modules.home.bed-home-name` (default `重生点`).
 
 ## /sethome — Create or Manage Homes
 
@@ -31,7 +41,7 @@ Right-clicking a home in the home list (`/home` or the `/sethome` management dia
 /sethome <name>
 ```
 
-Without a name, opens the home management dialog where players can view all homes, delete homes, or create new ones. With a name, creates or updates a home at the current location. Right-clicking a home in the list also opens the home editor.
+Without a name, opens the home management menu where players can view all homes, delete homes, or create new ones. With a name, creates or updates a home at the current location. Right-clicking a home in the list also opens the home editor.
 
 ## /delhome — Delete a Home
 
@@ -39,7 +49,7 @@ Without a name, opens the home management dialog where players can view all home
 /delhome <name>
 ```
 
-Deletes the specified home. Without a name, opens the management dialog.
+Deletes the specified home. Without a name, opens the management menu.
 
 ## Home Limit
 
@@ -57,3 +67,7 @@ When a player holds multiple such permissions, the highest value is used.
 ## Cross-Server Home Teleportation
 
 When `proxy.enabled` is on, `/home` can teleport across servers. If the target home is on another backend, KaProxy automatically switches the server and teleports the player to the exact coordinates. Cross-server home teleportation reuses the KaProxy Back module—no extra configuration needed.
+
+## World Blacklist
+
+`modules.home.disabled-worlds` in `config.yml` lists **world names that cannot be teleported to** (case-sensitive). `/home` is rejected when the destination world is blacklisted, and `/sethome` or updating a home is blocked while the player stands in a blacklisted world.

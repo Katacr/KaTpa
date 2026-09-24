@@ -14,7 +14,8 @@ import java.util.UUID;
 /** 管理玩家创建的公共地标：创建、传送、编辑、评分与传送收入结算。 */
 public final class PlayerWarpService {
     private final KaTpaPlugin plugin;
-    private final Map<UUID, Map<String, Long>> cooldowns = new HashMap<>();
+    /** 玩家地标全局冷却：玩家 UUID → 冷却结束时间戳（毫秒）。 */
+    private final Map<UUID, Long> cooldowns = new HashMap<>();
 
     /** 创建绑定插件服务的玩家地标服务。 */
     public PlayerWarpService(KaTpaPlugin plugin) {
@@ -23,18 +24,32 @@ public final class PlayerWarpService {
 
     /** 执行 /pwarp <名称>，检查冷却和费用后传送；创建者本人免费。 */
     public void warp(Player player, String name) {
+        warp(player, name, false);
+    }
+
+    /**
+     * 执行玩家地标传送。
+     *
+     * <p>{@code confirmed} 为 false 且目标收费时，仅发送可点击的二次确认消息
+     * （{@code [确定]} 继续传送、{@code [取消]} 放弃），不直接扣费。
+     */
+    public void warp(Player player, String name, boolean confirmed) {
         PlayerWarp warp = plugin.playerWarpStore().find(name);
         if (warp == null) {
             plugin.messages().send(player, "pwarp-not-found", Map.of("name", name));
             return;
         }
-        long remaining = cooldownRemaining(player, warp);
+        long remaining = cooldownRemaining(player);
         if (remaining > 0L) {
             plugin.messages().send(player, "pwarp-cooldown", Map.of("seconds", Long.toString(remaining)));
             return;
         }
         boolean isOwner = warp.ownerId().equals(player.getUniqueId());
         double cost = isOwner ? 0 : warp.cost();
+        if (cost > 0 && !confirmed) {
+            sendCostConfirm(player, warp, cost);
+            return;
+        }
         if (cost > 0 && !payCost(player, cost)) {
             plugin.messages().send(player, "pwarp-insufficient-funds", Map.of("cost", String.format("%.2f", cost)));
             return;
@@ -51,8 +66,28 @@ public final class PlayerWarpService {
         teleportCrossServer(player, warp, isOwner, cost);
     }
 
+    /** 发送收费地标的可点击二次确认消息：第 1 个区域 [确定] 继续传送，第 2 个区域 [取消] 放弃。 */
+    private void sendCostConfirm(Player player, PlayerWarp warp, double cost) {
+        String text = plugin.messages().text("pwarp-cost-confirm", Map.of(
+                "name", warp.name(),
+                "cost", String.format("%.2f", cost)));
+        org.katacr.katpa.text.ClickableText.sendClickableMulti(player, text, (index, label) -> {
+            if (index == 0) {
+                return p -> warp(p, warp.name(), true);
+            }
+            if (index == 1) {
+                return p -> plugin.messages().send(p, "pwarp-cost-cancelled", Map.of("name", warp.name()));
+            }
+            return null;
+        }, java.time.Duration.ofSeconds(30));
+    }
+
     /** 玩家创建地标，检查数量上限后写入。 */
     public boolean create(Player player, String name) {
+        if (plugin.teleports().isCurrentWorldDisabled("pwarp", player)) {
+            plugin.messages().send(player, "world-creation-disabled");
+            return false;
+        }
         if (name == null || name.isBlank()) {
             plugin.messages().send(player, "pwarp-name-empty");
             return false;
@@ -74,14 +109,20 @@ public final class PlayerWarpService {
             plugin.messages().send(player, "pwarp-limit", Map.of("max", Integer.toString(maxWarps(player))));
             return false;
         }
+        if (!chargeCreateCost(player)) {
+            return false;
+        }
         Location loc = player.getLocation();
         String server = plugin.network().serverId();
+        String serverId = plugin.network().displayServerId();
+        String world = loc.getWorld().getName();
+        String worldAlias = org.katacr.katpa.util.WorldNames.display(world);
         long now = System.currentTimeMillis();
         PlayerWarp warp = new PlayerWarp(
                 UUID.randomUUID(),
                 player.getUniqueId(),
                 player.getName(),
-                name, server, loc.getWorld().getName(),
+                name, server, serverId, world, worldAlias,
                 loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch(),
                 "",
@@ -89,9 +130,8 @@ public final class PlayerWarpService {
                 null,
                 "",
                 plugin.getConfig().getDouble("modules.pwarp.default-cost", 0),
-                plugin.getConfig().getInt("modules.pwarp.default-cooldown", 0),
                 now);
-        plugin.playerWarpStore().save(warp);
+        plugin.playerWarpStore().create(warp);
         plugin.messages().send(player, "pwarp-created", Map.of("name", name));
         return true;
     }
@@ -165,15 +205,31 @@ public final class PlayerWarpService {
         plugin.playerWarpStore().save(build(warp, b -> b.cost(Math.max(0, cost))));
     }
 
-    /** 更新地标冷却秒数。 */
-    public void setCooldown(Player player, String name, int cooldownSeconds) {
+    /** 以玩家当前位置更新地标坐标/世界/服务器，保留描述、图标与费用。 */
+    public boolean updateLocation(Player player, String name) {
         PlayerWarp warp = plugin.playerWarpStore().find(name);
-        if (warp == null) return;
+        if (warp == null) {
+            plugin.messages().send(player, "pwarp-not-found", Map.of("name", name));
+            return false;
+        }
         if (!canEdit(player, warp)) {
             plugin.messages().send(player, "pwarp-no-edit-permission");
-            return;
+            return false;
         }
-        plugin.playerWarpStore().save(build(warp, b -> b.cooldownSeconds(Math.max(0, cooldownSeconds))));
+        if (plugin.teleports().isCurrentWorldDisabled("pwarp", player)) {
+            plugin.messages().send(player, "world-creation-disabled");
+            return false;
+        }
+        Location loc = player.getLocation();
+        String world = loc.getWorld().getName();
+        plugin.playerWarpStore().save(build(warp, b -> b
+                .server(plugin.network().serverId())
+                .serverId(plugin.network().displayServerId())
+                .world(world)
+                .worldAlias(org.katacr.katpa.util.WorldNames.display(world))
+                .position(loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch())));
+        plugin.messages().send(player, "pwarp-location-updated", Map.of("name", name));
+        return true;
     }
 
     /** 以玩家手中物品设置地标图标（material/custom_data/item_model）。 */
@@ -192,11 +248,15 @@ public final class PlayerWarpService {
                 .iconCustomData(customData).iconItemModel(itemModel == null ? "" : itemModel)));
     }
 
-    /** 记录某玩家对某地标的评分（1-5 星）。 */
+    /** 记录某玩家对某地标的评分（1-5 星）；创建者不能给自己评分，重复评分覆盖上次。 */
     public void rate(Player player, String name, int stars) {
         PlayerWarp warp = plugin.playerWarpStore().find(name);
         if (warp == null) {
             plugin.messages().send(player, "pwarp-not-found", Map.of("name", name));
+            return;
+        }
+        if (warp.ownerId().equals(player.getUniqueId())) {
+            plugin.messages().send(player, "pwarp-rate-own");
             return;
         }
         if (stars < 1 || stars > 5) {
@@ -225,6 +285,20 @@ public final class PlayerWarpService {
     /** 判断玩家是否已收藏某地标。 */
     public boolean isFavorite(Player player, UUID warpId) {
         return plugin.pwarpMeta().isFavorite(player.getUniqueId(), warpId);
+    }
+
+    /**
+     * 重载玩家地标数据并重算排行榜缓存（供 {@code /pwarp admin reload}）。
+     *
+     * <p>异步重新读取 player_warp 全表到内存，随后重算前 N 名排行榜缓存。
+     */
+    public void reloadData() {
+        if (plugin.playerWarpStore() != null) {
+            plugin.playerWarpStore().reload();
+        }
+        if (plugin.warpRatingStore() != null) {
+            plugin.warpRatingStore().refreshLeaderboard();
+        }
     }
 
     /** 领取玩家离线期间累计的传送收入；在线直接 deposit，离线已挂账由 join 事件领取。 */
@@ -257,8 +331,8 @@ public final class PlayerWarpService {
 
     /** 本地传送并在成功后结算传送收入给创建者。 */
     private void teleportLocal(Player player, PlayerWarp warp, boolean isOwner, double cost) {
-        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), warp.world(),
-                "pwarp-world-unloaded", Map.of("name", warp.name()))) {
+        if (!plugin.teleports().ensureTargetAvailable("pwarp", player, warp.server(), warp.displayServer(),
+                warp.world(), "pwarp-world-unloaded", Map.of("name", warp.name()))) {
             return;
         }
         Location target = new Location(
@@ -266,7 +340,7 @@ public final class PlayerWarpService {
                 warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch());
         plugin.back().recordLocation(player);
-        startCooldown(player, warp);
+        startCooldown(player);
         plugin.teleports().beginDirect(player, "pwarp", () -> {
             plugin.back().markOwnTeleport(player.getUniqueId());
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -277,6 +351,8 @@ public final class PlayerWarpService {
                 plugin.sounds().playAt(target, "teleport", "pwarp");
                 plugin.messages().sendActionBar(player,
                         plugin.messages().component("pwarp-success", Map.of("name", warp.name()), false));
+                org.bukkit.Bukkit.getPluginManager().callEvent(
+                        new org.katacr.katpa.api.event.KaTpaEvent(player, org.katacr.katpa.api.event.KaTpaEvent.Action.WARP, warp.name()));
                 plugin.pwarpMeta().recordVisit(player.getUniqueId(), warp.id());
                 if (!isOwner && cost > 0) {
                     settleIncome(warp, cost);
@@ -287,16 +363,17 @@ public final class PlayerWarpService {
 
     /** 跨服传送：先完成源服吟唱，再请求代理切服并在落点后结算传送收入给创建者。 */
     private void teleportCrossServer(Player player, PlayerWarp warp, boolean isOwner, double cost) {
-        if (!plugin.teleports().ensureTargetAvailable(player, warp.server(), null, null, null)) {
+        if (!plugin.teleports().ensureTargetAvailable("pwarp", player, warp.server(), warp.displayServer(),
+                warp.world(), null, null)) {
             return;
         }
         plugin.back().recordLocation(player);
-        startCooldown(player, warp);
+        startCooldown(player);
         org.katacr.katpa.model.LocationRecord loc = new org.katacr.katpa.model.LocationRecord(
                 warp.server(), warp.world(), warp.x(), warp.y(), warp.z(),
                 warp.yaw(), warp.pitch(), System.currentTimeMillis());
         plugin.teleports().beginDirect(player, "pwarp", () -> {
-            if (!plugin.network().backRequest(player, warp.server(), loc, success -> {
+            if (!plugin.network().backRequest(player, warp.server(), loc, "player_warp", success -> {
                 if (Boolean.TRUE.equals(success)) {
                     plugin.pwarpMeta().recordVisit(player.getUniqueId(), warp.id());
                     if (!isOwner && cost > 0) {
@@ -331,23 +408,19 @@ public final class PlayerWarpService {
         return fn.apply(b).build();
     }
 
-    /** 返回玩家对指定地标的冷却剩余秒数，0 表示可用。 */
-    private long cooldownRemaining(Player player, PlayerWarp warp) {
-        if (warp.cooldownSeconds() <= 0) return 0L;
-        Map<String, Long> map = cooldowns.get(player.getUniqueId());
-        if (map == null) return 0L;
-        Long until = map.get(warp.name().toLowerCase(java.util.Locale.ROOT));
+    /** 返回玩家当前的地标传送冷却剩余秒数，0 表示可用。 */
+    private long cooldownRemaining(Player player) {
+        Long until = cooldowns.get(player.getUniqueId());
         if (until == null) return 0L;
         long remaining = (until - System.currentTimeMillis()) / 1000L;
         return Math.max(0L, remaining);
     }
 
-    /** 记录玩家对指定地标的冷却起点。 */
-    private void startCooldown(Player player, PlayerWarp warp) {
-        if (warp.cooldownSeconds() <= 0) return;
-        cooldowns.computeIfAbsent(player.getUniqueId(), k -> new HashMap<>())
-                .put(warp.name().toLowerCase(java.util.Locale.ROOT),
-                        System.currentTimeMillis() + warp.cooldownSeconds() * 1000L);
+    /** 记录玩家地标传送的冷却起点（全局冷却秒数，0 或负数表示不冷却）。 */
+    private void startCooldown(Player player) {
+        int seconds = plugin.getConfig().getInt("modules.pwarp.cooldown-seconds", 30);
+        if (seconds <= 0) return;
+        cooldowns.put(player.getUniqueId(), System.currentTimeMillis() + seconds * 1000L);
     }
 
     /** 尝试从玩家扣除传送费用，返回是否成功。 */
@@ -359,6 +432,46 @@ public final class PlayerWarpService {
         return withdraw.transactionSuccess();
     }
 
+    /**
+     * 收取「新建玩家地标」费用，返回是否允许继续创建。
+     *
+     * <p>由 {@code modules.pwarp.create-cost.currency} 选择货币：{@code money}（Vault 金币）
+     * 或 {@code points}（PlayerPoints 点券）；金额为 0 或对应前置缺失时不收费。
+     */
+    private boolean chargeCreateCost(Player player) {
+        String currency = plugin.getConfig().getString("modules.pwarp.create-cost.currency", "money");
+        if ("points".equalsIgnoreCase(currency)) {
+            int amount = Math.max(0, plugin.getConfig().getInt("modules.pwarp.create-cost.points", 0));
+            if (amount <= 0 || !plugin.points().available()) {
+                return true;
+            }
+            if (!plugin.points().take(player.getUniqueId(), amount)) {
+                plugin.messages().send(player, "pwarp-create-insufficient-points",
+                        Map.of("points", Integer.toString(amount)));
+                return false;
+            }
+            plugin.messages().send(player, "pwarp-create-charged-points",
+                    Map.of("points", Integer.toString(amount)));
+            return true;
+        }
+        double amount = Math.max(0, plugin.getConfig().getDouble("modules.pwarp.create-cost.money", 0));
+        if (amount <= 0) {
+            return true;
+        }
+        var economy = plugin.economy();
+        if (economy == null) {
+            return true;
+        }
+        if (!economy.withdrawPlayer(player, amount).transactionSuccess()) {
+            plugin.messages().send(player, "pwarp-create-insufficient-funds",
+                    Map.of("cost", String.format("%.2f", amount)));
+            return false;
+        }
+        plugin.messages().send(player, "pwarp-create-charged",
+                Map.of("cost", String.format("%.2f", amount)));
+        return true;
+    }
+
     /** 基于现有 PlayerWarp 复制全部字段的可变构造器。 */
     private static final class PlayerWarpBuilder {
         private final java.util.UUID id;
@@ -366,7 +479,9 @@ public final class PlayerWarpService {
         private final String ownerName;
         private String name;
         private String server;
+        private String serverId;
         private String world;
+        private String worldAlias;
         private double x, y, z;
         private float yaw, pitch;
         private String description;
@@ -374,7 +489,6 @@ public final class PlayerWarpService {
         private Integer iconCustomData;
         private String iconItemModel;
         private double cost;
-        private int cooldownSeconds;
         private final long createdAt;
 
         PlayerWarpBuilder(PlayerWarp warp) {
@@ -383,7 +497,9 @@ public final class PlayerWarpService {
             this.ownerName = warp.ownerName();
             this.name = warp.name();
             this.server = warp.server();
+            this.serverId = warp.serverId();
             this.world = warp.world();
+            this.worldAlias = warp.worldAlias();
             this.x = warp.x();
             this.y = warp.y();
             this.z = warp.z();
@@ -394,21 +510,26 @@ public final class PlayerWarpService {
             this.iconCustomData = warp.iconCustomData();
             this.iconItemModel = warp.iconItemModel();
             this.cost = warp.cost();
-            this.cooldownSeconds = warp.cooldownSeconds();
             this.createdAt = warp.createdAt();
         }
 
         PlayerWarpBuilder name(String v) { this.name = v; return this; }
+        PlayerWarpBuilder server(String v) { this.server = v; return this; }
+        PlayerWarpBuilder serverId(String v) { this.serverId = v; return this; }
+        PlayerWarpBuilder world(String v) { this.world = v; return this; }
+        PlayerWarpBuilder worldAlias(String v) { this.worldAlias = v; return this; }
+        PlayerWarpBuilder position(double x, double y, double z, float yaw, float pitch) {
+            this.x = x; this.y = y; this.z = z; this.yaw = yaw; this.pitch = pitch; return this;
+        }
         PlayerWarpBuilder description(String v) { this.description = v; return this; }
         PlayerWarpBuilder iconMaterial(String v) { this.iconMaterial = v; return this; }
         PlayerWarpBuilder iconCustomData(Integer v) { this.iconCustomData = v; return this; }
         PlayerWarpBuilder iconItemModel(String v) { this.iconItemModel = v; return this; }
         PlayerWarpBuilder cost(double v) { this.cost = v; return this; }
-        PlayerWarpBuilder cooldownSeconds(int v) { this.cooldownSeconds = v; return this; }
 
         PlayerWarp build() {
-            return new PlayerWarp(id, ownerId, ownerName, name, server, world, x, y, z, yaw, pitch,
-                    description, iconMaterial, iconCustomData, iconItemModel, cost, cooldownSeconds, createdAt);
+            return new PlayerWarp(id, ownerId, ownerName, name, server, serverId, world, worldAlias, x, y, z, yaw, pitch,
+                    description, iconMaterial, iconCustomData, iconItemModel, cost, createdAt);
         }
     }
 }

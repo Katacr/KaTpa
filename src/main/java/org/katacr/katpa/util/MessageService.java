@@ -7,6 +7,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.katacr.katpa.KaTpaPlugin;
+import org.katacr.katpa.text.AdventureSender;
+import org.katacr.katpa.text.TextParser;
 
 import java.io.File;
 import java.io.InputStream;
@@ -66,7 +68,7 @@ public final class MessageService {
 
     /** 以 Bukkit 通用的旧式文本 API 发送普通组件消息。 */
     public void sendComponent(CommandSender sender, Component message) {
-        sender.sendMessage(SECTION_SERIALIZER.serialize(message));
+        AdventureSender.sendMessage(sender, message);
     }
 
     /** 通过当前 Paper 或 Spigot 适配器发送组件 ActionBar。 */
@@ -78,7 +80,7 @@ public final class MessageService {
     public Component component(String key, Map<String, String> replacements, boolean prefix) {
         String value = text(key, replacements);
         String prefixText = prefix ? language.getString("prefix", "") : "";
-        return SERIALIZER.deserialize(prefixText + value);
+        return TextParser.parse(prefixText + value);
     }
 
     /** 返回完成占位符替换后的原始语言文本。 */
