@@ -1,6 +1,6 @@
 # 服务层与命令层（services）
 
-> 最后更新：2026-09-20（右键床自动设家；家编辑器；ConfigUpdater 提取修复）
+> 最后更新：2026-09-30（管理员/控制台代理 `/warp`）
 
 ## 现状
 
@@ -51,7 +51,7 @@
 | `/tpaccept` `/tpdeny` `/tpacancel` | 接受/拒绝/撤销（兼容别名 tpaaccept/tpadeny） | `katpa.use` |
 | `/tpasetting` | 接受模式/黑白名单/重载 | `katpa.setting` |
 | `/back` `/dback [n]` | 返回上次/死亡位置 | `katpa.back` / `katpa.dback` |
-| `/warp` `/setwarp` `/delwarp` | 地标传送/创建/删除 | `katpa.warp` / `katpa.warp.admin` |
+| `/warp [名称] [玩家]` `/setwarp` `/delwarp` | 地标传送/创建/删除；第二参数限管理员/控制台指定本服在线玩家，仍走目标玩家的完整传送流程 | `katpa.warp` / `katpa.warp.admin` |
 | `/pw <名称>` | 玩家地标快捷传送（收费地标先弹二次确认） | `katpa.pwarp.use` |
 | `/pwarp` | 打开玩家地标排行榜 | `katpa.pwarp.use` |
 | `/pwarp leaderboard\|favorites\|mine\|history` | 排行榜/收藏/我的地标/历史 | `katpa.pwarp.use` |
@@ -94,6 +94,9 @@
 - 跨服传送：源服完成吟唱后切服，目标服读最新位置落点；旧 UUID / 移动 / 受伤 / 离线 / 超时均安全中断。
 
 ## 当前待办
+
+- **管理员/控制台代理 warp（2026-09-30）**：`WarpCommand` 支持 `/warp <名称> <玩家>`；执行者须为控制台或有 `katpa.warp.admin`，目标通过 `Bukkit.getPlayerExact` 限定本服在线。命令直接调用 `WarpService.warp(target, name)`，故目标仍经过单地标权限、费用、冷却、目标可用性、同服/跨服和 `beginDirect` 吟唱；`plugin.yml` 为 `katpa.warp.admin` 增加 `katpa.warp` 子权限，避免权限插件移除基础节点时管理员无法触发命令。
+- **warp 菜单权限（2026-09-30）**：无参数 `/warp` 打开选择列表前必须有 `katpa.warp.menu`；该节点默认 `false`，`katpa.warp.admin` 作为子权限自动包含。`/warp <名称>` 不受此节点影响。
 
 - ~~进行中重构（未提交）：back/dback/home/warp 的跨服传送改为**先 `beginDirect` 吟唱再请求切服**~~ —— **2026-09-12 已完成**：`BackService`/`DbackService` 原有实现基础上，补齐 `HomeService.teleportCrossServer`、`WarpService.teleportCrossServer`、`PlayerWarpService.teleportCrossServer`，三者均在 `ensureTargetAvailable` 校验通过后调用 `beginDirect(module, () -> backRequest(...))`，做到本服/跨服吟唱一致（`modules.<module>.warmup-seconds`，默认 3s）。
 - 新增 `placeholder/` 模块（KaTpaPlaceholderExpansion）未提交，需补充占位符清单与文档到 services.md。

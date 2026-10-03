@@ -1,7 +1,7 @@
 # KaTpa 交接文件索引
 
 > 项目：KaTpa —— 面向 Paper 1.21.7 / Spigot 1.21.6+、JDK 21 的玩家传送插件
-> 最后更新：2026-09-21（`/pw`/`/pwarp admin`；排行榜缓存；PlayerPoints 创建收费；pwarp 全局冷却；移除迁移代码；编辑器更新位置；列表文本 i18n；评分点亮/提交；各模块世界黑名单）
+> 最后更新：2026-09-30（管理员/控制台代理 `/warp`；`/pw`/`/pwarp admin`；排行榜缓存；PlayerPoints 创建收费；pwarp 全局冷却；移除迁移代码；编辑器更新位置；列表文本 i18n；评分点亮/提交；各模块世界黑名单）
 
 ## 项目概览
 
@@ -32,6 +32,8 @@
 - [UI 交互层与网络层调研](research/ui-network.md)
 
 ## 当前进行中的工作（工作区未提交改动）
+
+- `/warp <名称> <玩家>`：管理员（`katpa.warp.admin`）或控制台可对本服在线玩家代理执行地标传送；复用 `WarpService.warp`，目标仍经历权限、费用、冷却、可用性校验与吟唱。无参数 `/warp` 打开列表新增 `katpa.warp.menu`，默认不授予玩家（`katpa.warp.admin` 自动包含）。详见 `services.md`。
 
 - 跨服传送（back/dback/home/warp）重构：**先在本服完成吟唱（`beginDirect`）再请求切服**，与单服传送行为对齐。改动文件：`BackService.java`、`DbackService.java`、`HomeService.java`、`WarpService.java`、`KaTpaPlugin.java`（+11 行，疑似 placeholder 注册相关）。
 - 新增 `placeholder/` 目录（KaTpaPlaceholderExpansion）+ 文档 `docs/perm/placeholders.md`、`docs-en/perm/placeholders.md`，均未提交。

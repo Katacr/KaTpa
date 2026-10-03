@@ -11,7 +11,7 @@
 | `/tpacancel` | Cancel your outgoing pending request |
 | `/back` | Return to your previous location |
 | `/dback` | Return to the most recent death location |
-| `/warp [name]` | Teleport to a warp; omit the name to open the selection list (teleport only, no admin subcommands) |
+| `/warp [name]` | Teleport to a warp; omitting the name requires `katpa.warp.menu` to open the selection list (teleport only, no admin subcommands) |
 | `/home [name]` | Teleport to a personal home; omit the name to open the selection list |
 | `/tpasetting` | Open personal settings |
 | `/tpasetting mode <dialog\|chat\|sneak>` | Change the request response mode |
@@ -26,6 +26,7 @@ Compatibility aliases: `/tpaaccept`, `/tpadeny`, and `/tpasettings`.
 | Command | Description | Permission |
 | --- | --- | --- |
 | `/katap reload` | Reload functional settings, language files, and the proxy toggle | `katpa.admin` |
+| `/warp <name> <player>` | Make an online player on this backend use a warp; their cost, cooldown, permissions, and warmup still apply | `katpa.warp.admin` (console allowed) |
 | `/katap warp edit <name>` | Open the warp editor GUI (description, icon, permission, cooldown, cost, rename) | `katpa.warp.admin` |
 | `/katap warp create <name>` | Create a warp at the current location | `katpa.warp.admin` |
 | `/katap warp delete <name>` | Delete a warp | `katpa.warp.admin` |

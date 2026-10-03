@@ -9,7 +9,8 @@
 | `katpa.back` | 所有玩家 | 使用 `/back` 返回上次位置 |
 | `katpa.dback` | 所有玩家 | 使用 `/dback` 返回死亡位置 |
 | `katpa.warp` | 所有玩家 | 使用 `/warp` 传送到地标 |
-| `katpa.warp.admin` | OP | 使用 `/setwarp`、`/delwarp` 和 `/katap warp ...` 管理地标（编辑、创建、删除、重命名、图标、设置字段） |
+| `katpa.warp.menu` | 无 | 使用无参数 `/warp` 打开地标传送列表；默认不授予玩家，`katpa.warp.admin` 自动包含此权限 |
+| `katpa.warp.admin` | OP | 使用 `/setwarp`、`/delwarp` 和 `/katap warp ...` 管理地标（编辑、创建、删除、重命名、图标、设置字段），并可用 `/warp <名称> <玩家>` 代理本服在线玩家传送 |
 | `katpa.home` | 所有玩家 | 使用 `/home`、`/sethome` 和 `/delhome` 管理个人家 |
 | `katpa.home.amount.<n>` | — | 允许设置 n 个家；默认 1，取玩家持有的最大值 |
 | `katpa.pwarp.use` | 所有玩家 | 使用 `/pwarp`、`/pw` 浏览与传送到玩家地标 |

@@ -46,8 +46,8 @@ commands:
     usage: /dback
     permission: katpa.dback
   warp:
-    description: 传送到地标
-    usage: /warp [名称]
+    description: 传送到地标，管理员可指定本服在线玩家
+    usage: /warp [名称] [玩家]
     permission: katpa.warp
   setwarp:
     description: 创建或更新地标
@@ -100,9 +100,15 @@ permissions:
   katpa.warp:
     description: 允许使用 /warp 传送到地标
     default: true
+  katpa.warp.menu:
+    description: 允许使用无参数 /warp 打开地标传送列表
+    default: false
   katpa.warp.admin:
-    description: 允许使用 /setwarp 和 /delwarp 管理地标
+    description: 允许管理地标并代理本服在线玩家使用 /warp
     default: op
+    children:
+      katpa.warp: true
+      katpa.warp.menu: true
   katpa.home:
     description: 允许使用 /home、/sethome 和 /delhome 管理个人家
     default: true

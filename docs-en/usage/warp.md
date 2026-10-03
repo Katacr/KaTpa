@@ -9,9 +9,12 @@ Administrators can set up public warp points that players can teleport to using 
 ```text
 /warp
 /warp <name>
+/warp <name> <player>
 ```
 
-Without a name, opens a warp selection list showing all available warps (with description and icon). With a name, teleports directly to the specified warp.
+Without a name, `katpa.warp.menu` is required to open the warp selection list showing all available warps (with description and icon); this permission is not granted to players by default. With a name, teleports directly to the specified warp.
+
+Administrators with `katpa.warp.admin`, or the console, can use `/warp <name> <player>` to teleport a target who is **online on this backend**. The target runs through the normal `/warp` flow: warp permission, cost, cooldown, and destination availability are still checked, and the configured warmup runs on the target. Administrators do not skip these steps.
 
 Each warp can have individually configured properties:
 

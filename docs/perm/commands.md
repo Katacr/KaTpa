@@ -11,7 +11,7 @@
 | `/tpacancel` | 撤销自己发出的待处理请求 |
 | `/back` | 返回上次位置 |
 | `/dback` | 返回最近一次死亡位置 |
-| `/warp [名称]` | 传送到地标；不填名称时打开选择列表（仅传送，无二级管理指令） |
+| `/warp [名称]` | 传送到地标；不填名称时需 `katpa.warp.menu` 才打开选择列表（仅传送，无二级管理指令） |
 | `/home [名称]` | 传送到个人家；不填名称时打开选择列表 |
 | `/tpasetting` | 打开个人设置 |
 | `/tpasetting mode <dialog\|chat\|sneak>` | 修改请求接收方式 |
@@ -26,6 +26,7 @@
 | 指令 | 说明 | 权限 |
 | --- | --- | --- |
 | `/katap reload` | 重载功能配置、语言和代理开关 | `katpa.admin` |
+| `/warp <名称> <玩家>` | 让本服在线玩家执行地标传送，仍执行其费用、冷却、权限和吟唱 | `katpa.warp.admin`（控制台可用） |
 | `/katap warp edit <名称>` | 打开地标编辑器 GUI（描述、图标、权限、冷却、费用、重命名） | `katpa.warp.admin` |
 | `/katap warp create <名称>` | 在当前位置创建地标 | `katpa.warp.admin` |
 | `/katap warp delete <名称>` | 删除地标 | `katpa.warp.admin` |

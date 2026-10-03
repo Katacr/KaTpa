@@ -9,7 +9,8 @@
 | `katpa.back` | Everyone | Use `/back` to return to the previous location |
 | `katpa.dback` | Everyone | Use `/dback` to return to a death location |
 | `katpa.warp` | Everyone | Use `/warp` to teleport to a warp |
-| `katpa.warp.admin` | OP | Use `/setwarp`, `/delwarp`, and `/katap warp ...` to manage warps (edit, create, delete, rename, icon, set fields) |
+| `katpa.warp.menu` | Nobody | Use `/warp` with no arguments to open the warp selection list; not granted to players by default and inherited by `katpa.warp.admin` |
+| `katpa.warp.admin` | OP | Use `/setwarp`, `/delwarp`, and `/katap warp ...` to manage warps (edit, create, delete, rename, icon, set fields), and use `/warp <name> <player>` for an online player on this backend |
 | `katpa.home` | Everyone | Use `/home`, `/sethome`, and `/delhome` to manage personal homes |
 | `katpa.home.amount.<n>` | — | Allows setting n homes; defaults to 1, takes the maximum value the player holds |
 | `katpa.pwarp.use` | Everyone | Use `/pwarp` and `/pw` to browse and teleport to player warps |
